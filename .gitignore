@@ -1,6 +1,6 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
 
 # Expo
@@ -9,7 +9,7 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native (prebuild / local dev client)
 .kotlin/
 *.orig.*
 *.jks
@@ -17,25 +17,65 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+*.hprof
+/ios
+/android
 
 # Metro
 .metro-health-check*
 
-# debug
+# Environment variables (commit .env.example instead)
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/
+
+# Logs & debug
+*.log
+logs/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+pnpm-debug.log*
+
+# ESLint / Prettier
+.eslintcache
 
 # macOS
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# typescript
-*.tsbuildinfo
+# Linux
+*~
 
-# generated native folders
-/ios
-/android
+# Editors & IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*.swo
+
+# Cursor (local workspace state; keep shared rules in .cursor/rules if needed)
+.cursor/
+
+# AI tooling (local editor/agent settings)
+.claude/
+
+# EAS / credentials (never commit secrets)
+credentials.json
+google-services.json
+GoogleService-Info.plist
+
+# Misc
+*.local

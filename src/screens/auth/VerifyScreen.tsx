@@ -1,96 +1,112 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { VerifyScreenProps } from '@appTypes/navigation';
+import {
+  AuthDecorBackground,
+  BackToSignInLink,
+  CheckEmailFooter,
+  CheckEmailIllustration,
+  CheckEmailMessage,
+  CheckEmailTopBar,
+  ResendEmailCard,
+  ResendSuccessToast,
+} from '@components/auth';
+import { CHECK_EMAIL_COPY, resolveCheckEmailMode } from '@constants/checkEmailCopy';
+import { authApi } from '@services/endpoints';
 import theme from '@theme/index';
 
 export default function VerifyScreen({ route, navigation }: VerifyScreenProps) {
-  const { email } = route.params;
+  const { email, mode: modeParam } = route.params;
+  const mode = resolveCheckEmailMode(modeParam);
+  const copy = CHECK_EMAIL_COPY[mode];
+
+  const [isResending, setIsResending] = useState(false);
+  const [resendError, setResendError] = useState('');
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+
+  const handleResend = useCallback(async () => {
+    setResendError('');
+    setShowSuccessToast(false);
+    setIsResending(true);
+
+    try {
+      if (mode === 'signup') {
+        await authApi.resendVerification(email);
+      } else {
+        // No password-reset resend endpoint yet — UI-only delay.
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      setShowSuccessToast(true);
+    } catch {
+      setResendError(copy.resendError);
+    } finally {
+      setIsResending(false);
+    }
+  }, [copy.resendError, email, mode]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          <Text style={styles.icon}>📧</Text>
+      <AuthDecorBackground />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.inner}>
+          <CheckEmailTopBar onClose={() => navigation.navigate('Login')} />
+
+          <View style={styles.centerContent}>
+            <CheckEmailIllustration />
+
+            <CheckEmailMessage
+              email={email}
+              subtitleBefore={copy.subtitleBefore}
+              subtitleAfter={copy.subtitleAfter}
+            />
+
+            <ResendEmailCard
+              prompt={copy.resendPrompt}
+              label={copy.resendLabel}
+              loading={isResending}
+              errorMessage={resendError}
+              onResend={handleResend}
+            />
+
+            <ResendSuccessToast
+              message={copy.resendSuccess}
+              visible={showSuccessToast}
+              onHide={() => setShowSuccessToast(false)}
+            />
+
+            <BackToSignInLink onPress={() => navigation.navigate('Login')} />
+          </View>
+
+          <CheckEmailFooter />
         </View>
-
-        <Text style={styles.title}>Check your email</Text>
-        <Text style={styles.subtitle}>
-          We sent a verification link to{'\n'}
-          <Text style={styles.email}>{email}</Text>
-        </Text>
-
-        <Text style={styles.hint}>
-          Click the link in your email to verify your account. If you don't see it, check your spam
-          folder.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={() => navigation.navigate('Login')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.continueButtonText}>Back to Sign In</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.surface.DEFAULT },
-  content: {
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: theme.spacing.marginMobile,
+    paddingVertical: theme.spacing.stackMd,
+  },
+  inner: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 448,
+    alignSelf: 'center',
+    minHeight: '100%',
+  },
+  centerContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: theme.spacing.xl,
-    gap: theme.spacing.lg,
-  },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: theme.colors.surface.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.sm,
-    ...theme.shadows.md,
-  },
-  icon: { fontSize: 48 },
-  title: {
-    fontSize: theme.typography.fontSize['2xl'],
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  email: {
-    color: theme.colors.primary[400],
-    fontWeight: theme.typography.fontWeight.semibold,
-  },
-  hint: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.text.muted,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  continueButton: {
-    backgroundColor: theme.colors.primary[600],
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing['2xl'],
-    borderRadius: theme.borderRadius.xl,
-    marginTop: theme.spacing.lg,
-    ...theme.shadows.md,
-  },
-  continueButtonText: {
-    color: theme.colors.white,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
+    paddingVertical: theme.spacing.stackLg,
   },
 });

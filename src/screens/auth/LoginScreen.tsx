@@ -1,63 +1,59 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import React, { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import {
-  ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { z } from 'zod';
 
 import type { LoginScreenProps } from '@appTypes/navigation';
-import { authApi } from '@services/endpoints';
+import {
+  AuthDecorBackground,
+  AuthFooterLink,
+  AuthHeader,
+  AuthInput,
+  AuthPrimaryButton,
+  GoogleSignInButton,
+  PasswordInput,
+} from '@components/auth';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
+import { signInWithMockAuth, signInWithMockGoogle } from '@utils/devAuth';
 
-// ─── Validation Schema ────────────────────────────────────────────────────────
-const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-});
+interface LoginFormData {
+  email: string;
+  password: string;
+}
 
-type LoginFormData = z.infer<typeof loginSchema>;
-
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const login = useAuthStore((state) => state.login);
 
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
+  const { control, handleSubmit } = useForm<LoginFormData>({
     defaultValues: { email: '', password: '' },
   });
 
   const onSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
     try {
-      const response = await authApi.login(data);
-      const { user, accessToken, refreshToken } = response.data.data;
-      login(user, accessToken, refreshToken);
-    } catch {
-      Alert.alert('Login Failed', 'Invalid email or password. Please try again.');
+      signInWithMockAuth(login, data.email);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleGooglePress = () => {
+    signInWithMockGoogle(login);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
+      <AuthDecorBackground />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -67,28 +63,18 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
+          <View style={styles.inner}>
+            <AuthHeader title="Sign In" subtitle="Let's build something great together." />
 
-          <View style={styles.header}>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to your CivicBuild account</Text>
-          </View>
-
-          {/* Form */}
-          <View style={styles.form}>
-            <Controller
-              control={control}
-              name="email"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <View style={styles.fieldContainer}>
-                  <Text style={styles.label}>Email</Text>
-                  <TextInput
-                    style={[styles.input, errors.email && styles.inputError]}
-                    placeholder="you@example.com"
-                    placeholderTextColor={theme.colors.text.muted}
+            <View style={styles.form}>
+              <Controller
+                control={control}
+                name="email"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <AuthInput
+                    label="Email Address"
+                    icon="email"
+                    placeholder="e.g. john@contractor.com"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -96,53 +82,48 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     onChangeText={onChange}
                     value={value}
                   />
-                  {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
-                </View>
-              )}
-            />
+                )}
+              />
 
-            <Controller
-              control={control}
-              name="password"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <View style={styles.fieldContainer}>
-                  <Text style={styles.label}>Password</Text>
-                  <TextInput
-                    style={[styles.input, errors.password && styles.inputError]}
-                    placeholder="••••••••"
-                    placeholderTextColor={theme.colors.text.muted}
-                    secureTextEntry
+              <Controller
+                control={control}
+                name="password"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <PasswordInput
+                    label="Password"
+                    placeholder="Min. 8 characters"
                     onBlur={onBlur}
                     onChangeText={onChange}
                     value={value}
                   />
-                  {errors.password && (
-                    <Text style={styles.errorText}>{errors.password.message}</Text>
-                  )}
-                </View>
-              )}
+                )}
+              />
+
+              <AuthPrimaryButton
+                label="Sign In"
+                loading={isSubmitting}
+                onPress={handleSubmit(onSubmit)}
+              />
+
+              <View style={styles.divider} />
+
+              <GoogleSignInButton onPress={handleGooglePress} />
+            </View>
+
+            <AuthFooterLink
+              prompt="Don't have an account?"
+              linkText="Sign Up."
+              onPress={() => navigation.navigate('Register')}
             />
 
-            <TouchableOpacity
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              onPress={handleSubmit(onSubmit)}
-              disabled={isSubmitting}
-              activeOpacity={0.85}
+            <Pressable
+              style={styles.forgotLink}
+              onPress={() => navigation.navigate('ForgotPassword')}
+              accessibilityRole="link"
+              accessibilityLabel="Forgot your password"
             >
-              {isSubmitting ? (
-                <ActivityIndicator color={theme.colors.white} />
-              ) : (
-                <Text style={styles.submitButtonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.footerLink}>Sign Up</Text>
-            </TouchableOpacity>
+              <Text style={styles.forgotLinkText}>Forgot your password?</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -151,68 +132,41 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.surface.DEFAULT },
-  keyboardView: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  keyboardView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacing.xl,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing['2xl'],
-  },
-  backButton: { marginBottom: theme.spacing.xl },
-  backButtonText: { color: theme.colors.primary[400], fontSize: theme.typography.fontSize.base },
-  header: { marginBottom: theme.spacing['2xl'] },
-  title: {
-    fontSize: theme.typography.fontSize['3xl'],
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
-  },
-  subtitle: { fontSize: theme.typography.fontSize.base, color: theme.colors.text.secondary },
-  form: { gap: theme.spacing.lg },
-  fieldContainer: { gap: theme.spacing.xs },
-  label: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  input: {
-    backgroundColor: theme.colors.surface.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 14,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.primary,
-  },
-  inputError: { borderColor: theme.colors.error },
-  errorText: { fontSize: theme.typography.fontSize.xs, color: theme.colors.error },
-  submitButton: {
-    backgroundColor: theme.colors.primary[600],
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.xl,
-    alignItems: 'center',
-    marginTop: theme.spacing.sm,
-    ...theme.shadows.md,
-  },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: {
-    color: theme.colors.white,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
-  },
-  footer: {
-    flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: theme.spacing['2xl'],
+    paddingHorizontal: theme.spacing.marginMobile,
+    paddingVertical: theme.spacing.stackLg,
   },
-  footerText: { color: theme.colors.text.secondary, fontSize: theme.typography.fontSize.base },
-  footerLink: {
-    color: theme.colors.primary[400],
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
+  inner: {
+    width: '100%',
+    maxWidth: 448,
+    alignSelf: 'center',
+  },
+  form: {
+    gap: theme.spacing.stackMd,
+    marginBottom: theme.spacing.stackLg,
+  },
+  divider: {
+    height: theme.spacing.stackSm,
+  },
+  forgotLink: {
+    alignSelf: 'center',
+    marginTop: theme.spacing.stackMd,
+    paddingVertical: theme.spacing.sm,
+  },
+  forgotLinkText: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodySm,
+    lineHeight: theme.typography.lineHeight.bodySm,
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
 });
