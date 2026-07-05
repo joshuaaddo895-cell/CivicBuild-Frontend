@@ -1,101 +1,56 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { z } from 'zod';
 
 import type { RegisterScreenProps } from '@appTypes/navigation';
-import { authApi } from '@services/endpoints';
+import {
+  AuthDecorBackground,
+  AuthFooterLink,
+  AuthHeroHeader,
+  AuthInput,
+  AuthPrimaryButton,
+  AuthScreenFooter,
+  AuthScreenTopBar,
+  AuthTermsNotice,
+  GoogleSignInButton,
+  PasswordInput,
+} from '@components/auth';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
+import { signInWithMockAuth, signInWithMockGoogle } from '@utils/devAuth';
 
-// ─── Validation Schema ────────────────────────────────────────────────────────
-const registerSchema = z
-  .object({
-    firstName: z.string().min(2, 'First name must be at least 2 characters'),
-    lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-    email: z.string().email('Please enter a valid email address'),
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-      .regex(/[0-9]/, 'Password must contain at least one number'),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
+interface RegisterFormData {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
 
-type RegisterFormData = z.infer<typeof registerSchema>;
-
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const login = useAuthStore((state) => state.login);
 
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { firstName: '', lastName: '', email: '', password: '', confirmPassword: '' },
+  const { control, handleSubmit } = useForm<RegisterFormData>({
+    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsSubmitting(true);
     try {
-      const payload = {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        password: data.password,
-      };
-      const response = await authApi.register(payload);
-      const { user, accessToken, refreshToken } = response.data.data;
-      login(user, accessToken, refreshToken);
-      navigation.navigate('Verify', { email: data.email });
-    } catch {
-      Alert.alert('Registration Failed', 'This email may already be in use. Please try again.');
+      signInWithMockAuth(login, data.email, data.name);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const fields: {
-    name: keyof RegisterFormData;
-    label: string;
-    placeholder: string;
-    secure?: boolean;
-    keyboardType?: 'email-address' | 'default';
-  }[] = [
-    { name: 'firstName', label: 'First Name', placeholder: 'John' },
-    { name: 'lastName', label: 'Last Name', placeholder: 'Doe' },
-    {
-      name: 'email',
-      label: 'Email',
-      placeholder: 'you@example.com',
-      keyboardType: 'email-address',
-    },
-    { name: 'password', label: 'Password', placeholder: '••••••••', secure: true },
-    { name: 'confirmPassword', label: 'Confirm Password', placeholder: '••••••••', secure: true },
-  ];
+  const handleGooglePress = () => {
+    signInWithMockGoogle(login);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
+      <AuthDecorBackground />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -105,61 +60,95 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
+          <View style={styles.inner}>
+            <AuthScreenTopBar onClose={() => navigation.navigate('Login')} />
 
-          <View style={styles.header}>
-            <Text style={styles.title}>Create account</Text>
-            <Text style={styles.subtitle}>Join the CivicBuild community today</Text>
-          </View>
+            <AuthHeroHeader title="Sign Up For Free" subtitle="Sign up in 1 minute for free!" />
 
-          <View style={styles.form}>
-            {fields.map(({ name, label, placeholder, secure, keyboardType }) => (
+            <View style={styles.form}>
               <Controller
-                key={name}
                 control={control}
-                name={name}
+                name="name"
                 render={({ field: { onChange, onBlur, value } }) => (
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>{label}</Text>
-                    <TextInput
-                      style={[styles.input, errors[name] && styles.inputError]}
-                      placeholder={placeholder}
-                      placeholderTextColor={theme.colors.text.muted}
-                      secureTextEntry={secure}
-                      keyboardType={keyboardType ?? 'default'}
-                      autoCapitalize={keyboardType === 'email-address' || secure ? 'none' : 'words'}
-                      autoCorrect={false}
-                      onBlur={onBlur}
-                      onChangeText={onChange}
-                      value={value}
-                    />
-                    {errors[name] && <Text style={styles.errorText}>{errors[name]?.message}</Text>}
-                  </View>
+                  <AuthInput
+                    label="Full Name"
+                    icon="person"
+                    placeholder="e.g. John Contractor"
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                  />
                 )}
               />
-            ))}
 
-            <TouchableOpacity
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              onPress={handleSubmit(onSubmit)}
-              disabled={isSubmitting}
-              activeOpacity={0.85}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={theme.colors.white} />
-              ) : (
-                <Text style={styles.submitButtonText}>Create Account</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              <Controller
+                control={control}
+                name="email"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <AuthInput
+                    label="Email Address"
+                    icon="email"
+                    placeholder="e.g. john@contractor.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                  />
+                )}
+              />
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.footerLink}>Sign In</Text>
-            </TouchableOpacity>
+              <Controller
+                control={control}
+                name="password"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <PasswordInput
+                    label="Password"
+                    placeholder="Min. 8 characters"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                  />
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="confirmPassword"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <PasswordInput
+                    label="Password Confirmation"
+                    placeholder="Confirm your password"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                  />
+                )}
+              />
+
+              <AuthTermsNotice />
+
+              <AuthPrimaryButton
+                label="Sign Up"
+                loading={isSubmitting}
+                onPress={handleSubmit(onSubmit)}
+              />
+
+              <View style={styles.divider} />
+
+              <GoogleSignInButton onPress={handleGooglePress} />
+            </View>
+
+            <AuthScreenFooter>
+              <AuthFooterLink
+                prompt="Already have an account?"
+                linkText="Sign In."
+                onPress={() => navigation.navigate('Login')}
+              />
+            </AuthScreenFooter>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -168,68 +157,27 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.surface.DEFAULT },
-  keyboardView: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  keyboardView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacing.xl,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing['2xl'],
+    paddingHorizontal: theme.spacing.marginMobile,
+    paddingVertical: theme.spacing.stackMd,
   },
-  backButton: { marginBottom: theme.spacing.xl },
-  backButtonText: { color: theme.colors.primary[400], fontSize: theme.typography.fontSize.base },
-  header: { marginBottom: theme.spacing['2xl'] },
-  title: {
-    fontSize: theme.typography.fontSize['3xl'],
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.sm,
+  inner: {
+    width: '100%',
+    maxWidth: 448,
+    alignSelf: 'center',
   },
-  subtitle: { fontSize: theme.typography.fontSize.base, color: theme.colors.text.secondary },
-  form: { gap: theme.spacing.md },
-  fieldContainer: { gap: theme.spacing.xs },
-  label: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  form: {
+    gap: theme.spacing.stackMd,
   },
-  input: {
-    backgroundColor: theme.colors.surface.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 14,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text.primary,
-  },
-  inputError: { borderColor: theme.colors.error },
-  errorText: { fontSize: theme.typography.fontSize.xs, color: theme.colors.error },
-  submitButton: {
-    backgroundColor: theme.colors.primary[600],
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.xl,
-    alignItems: 'center',
-    marginTop: theme.spacing.sm,
-    ...theme.shadows.md,
-  },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: {
-    color: theme.colors.white,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: theme.spacing['2xl'],
-  },
-  footerText: { color: theme.colors.text.secondary, fontSize: theme.typography.fontSize.base },
-  footerLink: {
-    color: theme.colors.primary[400],
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
+  divider: {
+    height: theme.spacing.stackSm,
   },
 });
