@@ -8,22 +8,10 @@ export const ROLE_OPTIONS: RoleOption[] = [
     icon: 'home',
   },
   {
-    id: 'supplier',
-    title: 'Material Supplier',
-    description: 'Providing cement, bricks & parts',
-    icon: 'widgets',
-  },
-  {
     id: 'construction',
     title: 'Construction Agency',
     description: 'General contractors & firm managers',
     icon: 'engineering',
-  },
-  {
-    id: 'planning',
-    title: 'Planning Agency',
-    description: 'Architects & structural engineers',
-    icon: 'straighten',
   },
   {
     id: 'delivery',

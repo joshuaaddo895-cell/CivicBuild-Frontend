@@ -5,14 +5,23 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Product } from '@appTypes/marketplace';
 import theme from '@theme/index';
+import { formatCedis, formatUnitSuffix } from '@utils/paystackAmount';
 
 interface ProductCardProps {
   product: Product;
+  isFavorite?: boolean;
   onQuotePress?: () => void;
   onFavoritePress?: () => void;
 }
 
-export default function ProductCard({ product, onQuotePress, onFavoritePress }: ProductCardProps) {
+export default function ProductCard({
+  product,
+  isFavorite = false,
+  onQuotePress,
+  onFavoritePress,
+}: ProductCardProps) {
+  const unitSuffix = formatUnitSuffix(product.unit);
+
   return (
     <View style={styles.card}>
       <View style={styles.imageWrapper}>
@@ -25,11 +34,19 @@ export default function ProductCard({ product, onQuotePress, onFavoritePress }: 
         />
         <Pressable
           onPress={onFavoritePress}
-          style={({ pressed }) => [styles.favoriteButton, pressed && styles.favoritePressed]}
+          style={({ pressed }) => [
+            styles.favoriteButton,
+            isFavorite && styles.favoriteButtonActive,
+            pressed && styles.favoritePressed,
+          ]}
           accessibilityRole="button"
           accessibilityLabel={`Save ${product.name} to favorites`}
         >
-          <MaterialIcons name="favorite-border" size={18} color={theme.colors.secondary} />
+          <MaterialIcons
+            name={isFavorite ? 'favorite' : 'favorite-border'}
+            size={18}
+            color={isFavorite ? theme.colors.error : '#FFFFFF'}
+          />
         </Pressable>
       </View>
       <View style={styles.body}>
@@ -38,7 +55,12 @@ export default function ProductCard({ product, onQuotePress, onFavoritePress }: 
           {product.name}
         </Text>
         <View style={styles.footer}>
-          <Text style={styles.price}>{product.priceLabel}</Text>
+          <View style={styles.priceBlock}>
+            <Text style={styles.price} numberOfLines={2}>
+              {formatCedis(product.price)}
+              {unitSuffix ? <Text style={styles.priceUnit}> / {unitSuffix}</Text> : null}
+            </Text>
+          </View>
           <Pressable
             onPress={onQuotePress}
             style={({ pressed }) => [styles.quoteButton, pressed && styles.quotePressed]}
@@ -78,9 +100,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(249, 249, 249, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    backgroundColor: 'rgba(249, 249, 249, 0.92)',
   },
   favoritePressed: {
     transform: [{ scale: 0.9 }],
@@ -109,12 +134,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  priceBlock: {
+    flex: 1,
   },
   price: {
     fontFamily: theme.typography.fontFamily.headline,
     fontSize: theme.typography.fontSize.headlineSm,
     lineHeight: theme.typography.lineHeight.headlineSm,
     color: theme.colors.primary,
+  },
+  priceUnit: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.labelMd,
+    lineHeight: theme.typography.lineHeight.labelMd,
+    color: theme.colors.onSurfaceVariant,
+    fontWeight: '400',
   },
   quoteButton: {
     width: 32,

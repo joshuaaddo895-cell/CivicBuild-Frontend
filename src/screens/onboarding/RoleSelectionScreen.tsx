@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { RoleSelectionScreenProps } from '@appTypes/navigation';
 import type { AccountType } from '@appTypes/onboarding';
-import { requiresVerification } from '@appTypes/onboarding';
 import { AuthDecorBackground, AuthFooterLink } from '@components/auth';
 import { OnboardingContinueButton, OnboardingHeader, RoleCard } from '@components/onboarding';
+import { getOnboardingStep, ONBOARDING_SCREEN_BY_STEP } from '@constants/onboardingRouteConfig';
 import { ROLE_OPTIONS } from '@constants/roleOptions';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
@@ -20,12 +20,14 @@ export default function RoleSelectionScreen({ navigation }: RoleSelectionScreenP
   const handleContinue = () => {
     setAccountType(selectedRole);
 
-    if (requiresVerification(selectedRole)) {
-      navigation.navigate('Verification');
+    const step = getOnboardingStep(selectedRole);
+
+    if (step === 'complete') {
+      completeOnboarding();
       return;
     }
 
-    completeOnboarding();
+    navigation.navigate(ONBOARDING_SCREEN_BY_STEP[step]);
   };
 
   const handleLogIn = () => {

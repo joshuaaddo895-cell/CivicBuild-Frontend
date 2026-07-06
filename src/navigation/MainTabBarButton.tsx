@@ -49,8 +49,8 @@ export function getMainTabIcon(
   switch (routeName) {
     case 'Home':
       return 'home';
-    case 'Search':
-      return 'search';
+    case 'Saved':
+      return focused ? 'favorite' : 'favorite-border';
     case 'Messages':
       return focused ? 'chat-bubble' : 'chat-bubble-outline';
     case 'Profile':

@@ -2,16 +2,29 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 
 import type { OnboardingStackParamList } from '@appTypes/navigation';
+import DeliveryProviderSetupScreen from '@screens/onboarding/DeliveryProviderSetupScreen';
+import PendingCompanyConfirmationScreen from '@screens/onboarding/PendingCompanyConfirmationScreen';
 import RoleSelectionScreen from '@screens/onboarding/RoleSelectionScreen';
 import VerificationScreen from '@screens/onboarding/VerificationScreen';
+import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
+function getInitialOnboardingRoute(): keyof OnboardingStackParamList {
+  const { accountType, deliveryProviderStatus } = useAuthStore.getState();
+
+  if (accountType === 'delivery' && deliveryProviderStatus === 'pending_company_confirmation') {
+    return 'PendingCompanyConfirmation';
+  }
+
+  return 'RoleSelection';
+}
+
 export default function OnboardingNavigator() {
   return (
     <Stack.Navigator
-      initialRouteName="RoleSelection"
+      initialRouteName={getInitialOnboardingRoute()}
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
@@ -20,6 +33,11 @@ export default function OnboardingNavigator() {
     >
       <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
       <Stack.Screen name="Verification" component={VerificationScreen} />
+      <Stack.Screen name="DeliveryProviderSetup" component={DeliveryProviderSetupScreen} />
+      <Stack.Screen
+        name="PendingCompanyConfirmation"
+        component={PendingCompanyConfirmationScreen}
+      />
     </Stack.Navigator>
   );
 }

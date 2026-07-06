@@ -5,11 +5,21 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MARKETPLACE_LOCATION } from '@constants/marketplaceData';
 import theme from '@theme/index';
 
+import CartIconButton from './CartIconButton';
+
 interface DashboardHeaderProps {
+  cartItemCount?: number;
+  onCartPress?: () => void;
   onNotificationsPress?: () => void;
+  onSettingsPress?: () => void;
 }
 
-export default function DashboardHeader({ onNotificationsPress }: DashboardHeaderProps) {
+export default function DashboardHeader({
+  cartItemCount = 0,
+  onCartPress,
+  onNotificationsPress,
+  onSettingsPress,
+}: DashboardHeaderProps) {
   return (
     <View style={styles.container}>
       <View style={styles.locationRow}>
@@ -17,15 +27,30 @@ export default function DashboardHeader({ onNotificationsPress }: DashboardHeade
         <Text style={styles.location}>{MARKETPLACE_LOCATION}</Text>
       </View>
       <Text style={styles.brand}>CivicBuild</Text>
-      <Pressable
-        onPress={onNotificationsPress}
-        style={({ pressed }) => [styles.notificationButton, pressed && styles.pressed]}
-        accessibilityRole="button"
-        accessibilityLabel="Notifications"
-      >
-        <MaterialIcons name="notifications-none" size={24} color={theme.colors.onSurfaceVariant} />
-        <View style={styles.notificationDot} />
-      </Pressable>
+      <View style={styles.actions}>
+        <CartIconButton itemCount={cartItemCount} onPress={onCartPress} />
+        <Pressable
+          onPress={onSettingsPress}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+        >
+          <MaterialIcons name="settings" size={24} color={theme.colors.onSurfaceVariant} />
+        </Pressable>
+        <Pressable
+          onPress={onNotificationsPress}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Notifications"
+        >
+          <MaterialIcons
+            name="notifications-none"
+            size={24}
+            color={theme.colors.onSurfaceVariant}
+          />
+          <View style={styles.notificationDot} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -62,11 +87,16 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     letterSpacing: theme.typography.letterSpacing.headlineMd,
   },
-  notificationButton: {
+  actions: {
     flex: 1,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: theme.spacing.xs,
+  },
+  iconButton: {
     padding: theme.spacing.xs,
+    position: 'relative',
   },
   pressed: {
     transform: [{ scale: 0.95 }],

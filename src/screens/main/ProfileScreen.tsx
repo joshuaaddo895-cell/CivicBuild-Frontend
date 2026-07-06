@@ -1,25 +1,40 @@
+import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ProfileScreenProps } from '@appTypes/navigation';
+import { findConstructionAgencyById } from '@constants/constructionAgencies';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 import { formatUserDisplayName } from '@utils/mockAuth';
+import {
+  getAccountTypeLabel,
+  getVerificationStatusColor,
+  getVerificationStatusLabel,
+} from '@utils/roleLabels';
 import { confirmSignOut, performSignOut } from '@utils/session';
-
-function formatAccountTypeLabel(accountType: string | null): string {
-  if (!accountType) {
-    return 'USER';
-  }
-
-  return accountType.replace(/-/g, ' ').toUpperCase();
-}
 
 export default function ProfileScreen(_props: ProfileScreenProps) {
   const user = useAuthStore((state) => state.user);
   const accountType = useAuthStore((state) => state.accountType);
+  const verificationStatus = useAuthStore((state) => state.verificationStatus);
+  const deliveryProviderProfile = useAuthStore((state) => state.deliveryProviderProfile);
   const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const displayName = deliveryProviderProfile?.fullName?.trim() || formatUserDisplayName(user);
+  const profileImageUri = deliveryProviderProfile?.profileImageUri ?? null;
+  const avatarInitial = displayName[0]?.toUpperCase() ?? '?';
+  const associatedAgency = findConstructionAgencyById(
+    deliveryProviderProfile?.constructionAgencyId ?? null,
+  );
+
+  const menuItems = [
+    { icon: 'edit' as const, label: 'Edit Profile', onPress: () => {} },
+    { icon: 'star-outline' as const, label: 'My Reviews / Ratings', onPress: () => {} },
+    { icon: 'help-outline' as const, label: 'Help & Support', onPress: () => {} },
+  ];
 
   const handleLogout = () => {
     confirmSignOut(async () => {
@@ -32,17 +47,6 @@ export default function ProfileScreen(_props: ProfileScreenProps) {
     });
   };
 
-  const displayName = formatUserDisplayName(user);
-  const avatarInitial = displayName[0]?.toUpperCase() ?? '?';
-
-  const menuItems = [
-    { emoji: '⚙️', label: 'Settings', onPress: () => {} },
-    { emoji: '🔔', label: 'Notifications', onPress: () => {} },
-    { emoji: '🔒', label: 'Privacy & Security', onPress: () => {} },
-    { emoji: '❓', label: 'Help & Support', onPress: () => {} },
-    { emoji: '📄', label: 'Terms of Service', onPress: () => {} },
-  ];
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -52,13 +56,61 @@ export default function ProfileScreen(_props: ProfileScreenProps) {
 
         <View style={styles.profileCard}>
           <View style={styles.avatarLarge}>
-            <Text style={styles.avatarText}>{avatarInitial}</Text>
+            {profileImageUri ? (
+              <Image
+                source={{ uri: profileImageUri }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                accessibilityLabel="Profile photo"
+              />
+            ) : (
+              <Text style={styles.avatarText}>{avatarInitial}</Text>
+            )}
           </View>
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.email}>{user?.email ?? ''}</Text>
+
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{formatAccountTypeLabel(accountType)}</Text>
+            <Text style={styles.roleText}>{getAccountTypeLabel(accountType)}</Text>
           </View>
+
+          {accountType === 'construction' ? (
+            <View
+              style={[
+                styles.statusBadge,
+                { borderColor: getVerificationStatusColor(verificationStatus) },
+              ]}
+            >
+              <MaterialIcons
+                name={verificationStatus === 'verified' ? 'verified' : 'hourglass-top'}
+                size={16}
+                color={getVerificationStatusColor(verificationStatus)}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: getVerificationStatusColor(verificationStatus) },
+                ]}
+              >
+                {getVerificationStatusLabel(verificationStatus)}
+              </Text>
+            </View>
+          ) : null}
+
+          {accountType === 'delivery' && associatedAgency ? (
+            <View style={styles.companyCard}>
+              <Image
+                source={{ uri: associatedAgency.logoUri }}
+                style={styles.companyLogo}
+                contentFit="cover"
+                accessibilityLabel={`${associatedAgency.name} logo`}
+              />
+              <View style={styles.companyInfo}>
+                <Text style={styles.companyLabel}>Associated Company</Text>
+                <Text style={styles.companyName}>{associatedAgency.name}</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.menu}>
@@ -74,9 +126,9 @@ export default function ProfileScreen(_props: ProfileScreenProps) {
               accessibilityRole="button"
               accessibilityLabel={item.label}
             >
-              <Text style={styles.menuItemEmoji}>{item.emoji}</Text>
+              <MaterialIcons name={item.icon} size={22} color={theme.colors.onSurfaceVariant} />
               <Text style={styles.menuItemLabel}>{item.label}</Text>
-              <Text style={styles.menuItemChevron}>›</Text>
+              <MaterialIcons name="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />
             </Pressable>
           ))}
         </View>
@@ -90,13 +142,13 @@ export default function ProfileScreen(_props: ProfileScreenProps) {
           onPress={handleLogout}
           disabled={isSigningOut}
           accessibilityRole="button"
-          accessibilityLabel="Sign out"
+          accessibilityLabel="Log out"
           accessibilityState={{ disabled: isSigningOut, busy: isSigningOut }}
         >
           {isSigningOut ? (
             <ActivityIndicator color={theme.colors.error} />
           ) : (
-            <Text style={styles.logoutText}>Sign Out</Text>
+            <Text style={styles.logoutText}>Log Out</Text>
           )}
         </Pressable>
       </ScrollView>
@@ -129,15 +181,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.outlineVariant,
     ...theme.shadows.sm,
+    gap: theme.spacing.sm,
   },
   avatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: theme.colors.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     color: theme.colors.onPrimary,
@@ -150,7 +208,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.headlineSm,
     lineHeight: theme.typography.lineHeight.headlineSm,
     color: theme.colors.onSurface,
-    marginBottom: 4,
     textAlign: 'center',
   },
   email: {
@@ -158,7 +215,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.bodySm,
     lineHeight: theme.typography.lineHeight.bodySm,
     color: theme.colors.onSurfaceVariant,
-    marginBottom: theme.spacing.md,
   },
   roleBadge: {
     backgroundColor: `${theme.colors.primaryContainer}33`,
@@ -167,6 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
     borderColor: theme.colors.primaryContainer,
+    marginTop: theme.spacing.xs,
   },
   roleText: {
     fontFamily: theme.typography.fontFamily.label,
@@ -175,6 +232,54 @@ const styles = StyleSheet.create({
     letterSpacing: theme.typography.letterSpacing.labelMd,
     color: theme.colors.primary,
     textTransform: 'uppercase',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    backgroundColor: theme.colors.surfaceContainerLow,
+  },
+  statusText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    textTransform: 'uppercase',
+  },
+  companyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    width: '100%',
+    marginTop: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: theme.colors.outlineVariant,
+  },
+  companyLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.md,
+  },
+  companyInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  companyLabel: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onSurfaceVariant,
+    textTransform: 'uppercase',
+  },
+  companyName: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.onSurface,
+    fontWeight: '600',
   },
   menu: {
     backgroundColor: theme.colors.surfaceContainerLowest,
@@ -196,20 +301,12 @@ const styles = StyleSheet.create({
   menuItemPressed: {
     backgroundColor: theme.colors.surfaceContainerLow,
   },
-  menuItemEmoji: {
-    fontSize: 20,
-  },
   menuItemLabel: {
     flex: 1,
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.bodyMd,
     lineHeight: theme.typography.lineHeight.bodyMd,
     color: theme.colors.onSurface,
-  },
-  menuItemChevron: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.fontSize.bodyLg,
-    color: theme.colors.onSurfaceVariant,
   },
   logoutButton: {
     backgroundColor: theme.colors.surfaceContainerLowest,

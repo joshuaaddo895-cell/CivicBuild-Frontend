@@ -1,6 +1,12 @@
 import type { MaterialIcons } from '@expo/vector-icons';
 
-export type AccountType = 'customer' | 'supplier' | 'construction' | 'planning' | 'delivery';
+export type AccountType = 'customer' | 'construction' | 'delivery';
+
+export type OnboardingStep = 'complete' | 'verification' | 'delivery_setup';
+
+export type VerificationStatus = 'pending' | 'verified' | 'rejected';
+
+export type DeliveryProviderStatus = 'none' | 'pending_company_confirmation' | 'approved';
 
 export interface RoleOption {
   id: AccountType;
@@ -9,6 +15,8 @@ export interface RoleOption {
   icon: keyof typeof MaterialIcons.glyphMap;
 }
 
-export function requiresVerification(accountType: AccountType): boolean {
-  return accountType !== 'customer';
+export interface DeliveryProviderProfile {
+  profileImageUri: string | null;
+  fullName: string;
+  constructionAgencyId: string | null;
 }
