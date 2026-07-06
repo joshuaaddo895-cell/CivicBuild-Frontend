@@ -7,12 +7,14 @@ import theme from '@theme/index';
 interface OnboardingContinueButtonProps {
   disabled?: boolean;
   loading?: boolean;
+  label?: string;
   onPress: () => void;
 }
 
 export default function OnboardingContinueButton({
   disabled = false,
   loading = false,
+  label = 'Continue',
   onPress,
 }: OnboardingContinueButtonProps) {
   const isDisabled = disabled || loading;
@@ -27,14 +29,14 @@ export default function OnboardingContinueButton({
         pressed && !isDisabled && styles.buttonPressed,
       ]}
       accessibilityRole="button"
-      accessibilityLabel="Continue"
+      accessibilityLabel={label}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
     >
       {loading ? (
         <ActivityIndicator color={theme.colors.onPrimary} />
       ) : (
         <View style={styles.content}>
-          <Text style={[styles.label, isDisabled && styles.labelDisabled]}>Continue</Text>
+          <Text style={[styles.label, isDisabled && styles.labelDisabled]}>{label}</Text>
           <MaterialIcons
             name="arrow-forward"
             size={22}

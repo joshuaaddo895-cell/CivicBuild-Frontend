@@ -3,117 +3,115 @@
 ## 1. What This App Is
 
 CivicBuild is a mobile-first construction marketplace and directory platform
-connecting customers, material suppliers, construction agencies, planning/
-architectural agencies, and delivery providers into one centralized ecosystem.
+connecting customers, construction agencies, and delivery providers into one
+centralized ecosystem.
 
 ## 2. Problem Statement
 
 The construction industry in many African countries is highly fragmented and
 inefficient. Individuals building homes or commercial properties struggle to
-find trusted suppliers, contractors, planning agencies, and construction
-service providers in a centralized system.
+find trusted contractors, materials, and construction service providers in a
+centralized system.
 
 Currently, people rely on WhatsApp groups, referrals, roadside discovery,
-Facebook listings, and phone calls to locate construction material suppliers,
-block and brick providers, gravel and sand suppliers, roofing companies,
-contractors, and planning agencies.
+Facebook listings, and phone calls to locate construction materials, block and
+brick providers, gravel and sand suppliers, roofing companies, contractors, and
+agencies.
 
 This creates problems such as: difficulty verifying legitimacy, inconsistent
 pricing, procurement delays, lack of centralized communication, poor project
 coordination, and limited transparency.
 
 CivicBuild solves this with a mobile-based construction ecosystem app that
-centralizes suppliers, agencies, contractors, and customers into one digital
-marketplace.
+centralizes agencies, delivery personnel, materials listings, and customers into
+one digital marketplace.
 
 ## 3. High-Level Overview
 
-- **Shops/Suppliers** register businesses, upload construction materials,
-  manage inventory, receive quote requests, and communicate with customers.
-- **Construction Agencies** showcase portfolios, list services, receive
-  project requests, and bid for contracts.
-- **Customers** search for suppliers, compare materials, discover agencies,
-  request quotations, and manage project procurement.
+- **Construction Agencies** register businesses, upload verification documents,
+  showcase portfolios, list services, manage delivery personnel, and receive
+  project requests.
+- **Delivery Providers** complete a dedicated setup flow, associate with a
+  verified construction agency, and await company confirmation before full
+  marketplace access.
+- **Customers** search for materials and agencies, compare listings, request
+  quotations, save favorites, and manage project procurement.
+
+**Marketplace catalog:** Product and supplier cards on the dashboard are
+**admin-curated, role-agnostic listings** for now (not owned by a removed
+Material Supplier role). Ownership may move to Construction Agencies when the
+backend supports it.
 
 ---
 
 ## 4. User Roles & RBAC
 
-Five account types, selected during onboarding:
+Three account types, selected during onboarding:
 
-| Role                            | Description                                     | Requires Verification? |
-| ------------------------------- | ----------------------------------------------- | ---------------------- |
-| Customer                        | Finds suppliers, agencies, requests quotes      | No                     |
-| Material Supplier               | Sells construction materials, manages inventory | Yes                    |
-| Construction Agency             | Showcases portfolio, bids on projects           | Yes                    |
-| Planning & Architectural Agency | Offers design/planning services                 | Yes                    |
-| Delivery Provider               | Manages deliveries for suppliers/customers      | Yes                    |
+| Role                | Description                                | Onboarding Path                                                         |
+| ------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| Customer            | Finds materials, agencies, requests quotes | Role Selection → Dashboard                                              |
+| Construction Agency | Showcases portfolio, bids on projects      | Role Selection → Verification (document upload)                         |
+| Delivery Provider   | Logistics for construction companies       | Role Selection → Delivery Provider Setup → Pending Company Confirmation |
 
-**Verification field differences by role** (form must be config-driven, not
-hardcoded):
+**Construction Agency verification** (config-driven form):
 
-- Material Supplier: business name, material category, business registration doc
-- Construction Agency: agency name, specialization, portfolio upload, registration doc
-- Planning Agency: firm name, specialization, portfolio upload, professional license doc
-- Delivery Provider: business/individual name, vehicle info, driver's license/ID
+- Agency name, service category, registration/portfolio document upload
+- Verification status on profile: Pending / Verified / Rejected
 
-Verification status states: Pending Verification (amber), Verified (green
-checkmark badge), Rejected (red, with reason).
+**Delivery Provider setup** (separate from agency verification):
+
+- Profile photo upload (expo-image-picker + expo-image preview)
+- Full name (pre-filled from Sign Up or Google mock auth, editable)
+- Required association with a verified Construction Agency (searchable select,
+  stored as `constructionAgencyId` foreign key — not free text)
+- Submit → **Pending Company Confirmation** until the associated agency approves
+  (demo: “Simulate Company Approval” on pending screen)
 
 ---
 
-## 5. Screens (Full List — 7 Screens)
+## 5. Screens
 
-### Auth Flow
+### Auth Flow (unchanged in this phase)
 
-1. **Sign In** — email/password entry point (no separate Welcome screen; Sign In
-   is the direct app entry). Google button present as UI only for now (no OAuth
-   wiring unless already implemented in this codebase).
-2. **Sign Up** — email, password, password confirmation only (no first/last name
-   fields). Live validation with red-border error state ("ERROR: Password do
-   not match").
-3. **Forgot Password** — single email field only. No 2FA/OTP/Authenticator
-   options — manual email reset link only.
-4. **Check Your Email** — confirmation screen, reused/repurposed component with
-   a mode prop to handle both password-reset confirmation and (optional)
-   signup-confirmation, with copy branching correctly per mode ("reset your
-   password" vs. "confirm your account").
+1. **Sign In** — email/password entry; Google button (mock auth)
+2. **Sign Up** — full name, email, password, confirmation; Google button (mock)
+3. **Forgot Password** — email → Check Your Email (`mode: 'reset'`)
+4. **Check Your Email** — reused with `mode: 'reset' | 'signup'`
 
 ### Onboarding / RBAC Flow
 
-5. **Role Selection** — 5 selectable role cards (see table above), radio-style
-   selection, green highlight on selected card, "Continue" disabled until a
-   role is chosen.
-6. **Verification** — shown for all roles except Customer. Config-driven form
-   fields per role, document upload with dashed-border upload card, status
-   badge, "Submit for Review" disabled until required fields + document are
-   present.
-7. **Marketplace Dashboard** — replaces the existing generic HomeScreen entirely.
-   This becomes the actual post-onboarding landing screen (primarily for
-   Customer role). Includes:
-   - Header: logo, location, notification bell
-   - Search bar
-   - Horizontal category chips (Cement, Blocks/Bricks, Gravel, Sand/Soil,
-     Roofing Sheets, Tiles, Paint, Plumbing, Electrical)
-   - "Trusted Suppliers Near You" horizontal cards (verified badge, name,
-     category tag, rating, distance)
-   - "Popular Materials" 2-column product grid with realistic material photos
-     (cement blocks, roofing sheets, sand/gravel, cement bags, tiles, PVC pipes),
-     product name, supplier name, price, quick-quote button
-   - Bottom tab navigation: Home, Search, Messages, Profile
+5. **Role Selection** — 3 role cards (Customer, Construction Agency, Delivery
+   Provider); config-driven routing via `onboardingRouteConfig.ts`
+6. **Verification** — Construction Agency only; config-driven fields + upload
+7. **Delivery Provider Setup** — photo, name, construction company select
+8. **Pending Company Confirmation** — waiting state until agency approves
+
+### Main App (post-onboarding)
+
+9. **Marketplace Dashboard (Home)** — search bar, category chips, trusted
+   suppliers, popular materials grid; **settings gear** in header (not bottom nav)
+10. **Saved** — filterable favorites (Materials, Suppliers, Agencies)
+11. **Messages** — thread list + conversation detail (chat UI)
+12. **Profile** — identity, role badge, company link (delivery), verification
+    badge (agency); Edit Profile, Reviews, Help, Log Out
+13. **Settings** — reached from dashboard header only: Account, Notifications,
+    Privacy, App preferences, Log Out, Delete Account
+
+**Bottom navigation:** Home · Saved · Messages · Profile (Search tab removed;
+search lives on Home dashboard only)
 
 ---
 
 ## 6. Design System
 
-- Background: white
-- Primary accent: green (~#4CAF50)
+- Background: white / `#f9f9f9`
+- Primary accent: green (`#006e1c` / `#4CAF50` container)
 - Inputs: rounded fields, soft gray borders
-- Buttons: full-width, rounded, green primary with arrow icon
-- Icons: simple line-style icons; plus/cross-style app logo mark
-- Typography: bold headings, medium-weight body text
-- Consistent spacing and soft card shadows across all screens
-- Source of truth for exact layout/copy per screen: PROMPT.md (Stitch export)
+- Buttons: full-width, rounded, green primary
+- Typography: Manrope (headlines), Hanken Grotesk (body)
+- Source of truth for pixel-level layout: `PROMPT.md` (Stitch export)
+- Theme tokens: `src/theme/index.ts`
 
 ---
 
@@ -121,52 +119,41 @@ checkmark badge), Rejected (red, with reason).
 
 **User Management**
 
-- Register/Login
-- Verify phone/email
-- Manage profiles
-- Choose account type
+- Register/Login (mock auth until backend ready)
+- Choose account type with role-specific onboarding
+- Manage profiles; delivery ↔ construction agency association
 
-**Supplier Management**
+**Marketplace (Customer-facing)**
 
-- Create storefronts
-- Upload products
-- Set prices
-- Manage stock
-- Upload verification documents
-- Receive quote requests
+- Admin-curated material/supplier listings (mock data)
+- Search and category filtering on Home
+- Save/favorite items
+- Quote requests (UI placeholders)
 
-**Agency Management**
+**Construction Agency**
 
-- Create profiles
-- Upload portfolios
-- List services
-- Receive project inquiries
-- Respond to bids
+- Verification document upload
+- Future: manage associated delivery providers
 
-**Material Categories**
-Cement, Blocks/Bricks, Gravel, Sand/Soil, Roofing Sheets, Tiles, Paint,
-Plumbing Materials, Electrical Materials
+**Delivery Provider**
+
+- Dedicated setup + company approval gate
 
 **Additional Features**
 
-- Search and filtering
-- Quote requests
-- Ratings and reviews
-- Messaging system
-- Notifications
-- Admin moderation
+- Messaging (mock threads)
+- Notifications (UI)
+- Ratings and reviews (placeholders)
 
 ---
 
 ## 8. Non-Functional Requirements
 
-- **Scalability:** support thousands of users, handle concurrent requests
-- **Availability:** high uptime, fault tolerance, backup systems
-- **Performance:** fast loading, low-bandwidth optimization, optimized image
-  loading (use expo-image, WebP where possible)
-- **Security:** JWT authentication, secure file uploads, encrypted passwords
-- **Maintainability:** modular architecture, independent deployment support
-- **Usability:** mobile-first, responsive, intuitive interface
+- **Scalability:** support thousands of users
+- **Performance:** expo-image, optimized lists
+- **Security:** JWT when backend wired; env secrets not committed
+- **Usability:** mobile-first, accessibility labels on interactive elements
+- **Maintainability:** config-driven onboarding routing, typed props/forms
 
 ---
 
@@ -174,27 +161,20 @@ Plumbing Materials, Electrical Materials
 
 **Frontend**
 
-- React Native + Expo
-- Existing navigation library already configured in this repo (React Navigation
-  or Expo Router — confirm before adding a new one)
-- State management: existing global state solution if present (Zustand/Context/
-  Redux) — check before introducing anything new
-- expo-image for image handling/caching
-- TypeScript for all components, props, and data shapes
+- React Native + Expo SDK 57
+- React Navigation (native stack + bottom tabs + nested stacks for Home/Settings and Messages)
+- Zustand (auth, saved favorites)
+- expo-image, expo-image-picker, expo-document-picker
+- TypeScript throughout
 
-**Backend** (per original system design)
+**Backend** (planned)
 
-- Spring Boot microservices
-- Microservices: Authentication, Supplier, Agency, Quote, Messaging, Review
-- Database: PostgreSQL
-- File storage: Cloudinary or AWS S3
-
-> Note: confirm whether this repo's actual backend matches the above — the
-> original system design doc specifies Spring Boot/PostgreSQL, but implementation
-> specifics should be verified against what's actually deployed/connected.
+- Spring Boot microservices, PostgreSQL, Cloudinary/S3
 
 ---
 
 ## 10. API Design
 
 **Authentication**
+
+- Endpoints defined in `src/api/` — not wired on auth screens during mock phase

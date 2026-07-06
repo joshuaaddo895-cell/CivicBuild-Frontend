@@ -3,7 +3,12 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import type { User } from '@appTypes/api';
-import type { AccountType } from '@appTypes/onboarding';
+import type {
+  AccountType,
+  DeliveryProviderProfile,
+  DeliveryProviderStatus,
+  VerificationStatus,
+} from '@appTypes/onboarding';
 
 interface AuthState {
   user: User | null;
@@ -13,6 +18,9 @@ interface AuthState {
   isLoading: boolean;
   accountType: AccountType | null;
   onboardingComplete: boolean;
+  verificationStatus: VerificationStatus | null;
+  deliveryProviderProfile: DeliveryProviderProfile | null;
+  deliveryProviderStatus: DeliveryProviderStatus;
 }
 
 interface AuthActions {
@@ -23,6 +31,10 @@ interface AuthActions {
   setLoading: (isLoading: boolean) => void;
   setAccountType: (accountType: AccountType) => void;
   completeOnboarding: () => void;
+  setVerificationStatus: (status: VerificationStatus) => void;
+  setDeliveryProviderProfile: (profile: DeliveryProviderProfile) => void;
+  submitDeliveryProviderSetup: (profile: DeliveryProviderProfile) => void;
+  approveDeliveryProvider: () => void;
 }
 
 type AuthStore = AuthState & AuthActions;
@@ -35,6 +47,9 @@ const initialState: AuthState = {
   isLoading: false,
   accountType: null,
   onboardingComplete: false,
+  verificationStatus: null,
+  deliveryProviderProfile: null,
+  deliveryProviderStatus: 'none',
 };
 
 export const useAuthStore = create<AuthStore>()(
@@ -72,6 +87,28 @@ export const useAuthStore = create<AuthStore>()(
       completeOnboarding: () => {
         set({ onboardingComplete: true });
       },
+
+      setVerificationStatus: (status) => {
+        set({ verificationStatus: status });
+      },
+
+      setDeliveryProviderProfile: (profile) => {
+        set({ deliveryProviderProfile: profile });
+      },
+
+      submitDeliveryProviderSetup: (profile) => {
+        set({
+          deliveryProviderProfile: profile,
+          deliveryProviderStatus: 'pending_company_confirmation',
+        });
+      },
+
+      approveDeliveryProvider: () => {
+        set({
+          deliveryProviderStatus: 'approved',
+          onboardingComplete: true,
+        });
+      },
     }),
     {
       name: 'civicbuild-auth-storage',
@@ -83,6 +120,9 @@ export const useAuthStore = create<AuthStore>()(
         isAuthenticated: state.isAuthenticated,
         accountType: state.accountType,
         onboardingComplete: state.onboardingComplete,
+        verificationStatus: state.verificationStatus,
+        deliveryProviderProfile: state.deliveryProviderProfile,
+        deliveryProviderStatus: state.deliveryProviderStatus,
       }),
     },
   ),

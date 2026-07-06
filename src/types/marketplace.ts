@@ -1,3 +1,4 @@
+/** Marketplace catalog entries — admin-curated listings, not tied to a Material Supplier role. */
 export interface MarketplaceCategory {
   id: string;
   label: string;
@@ -22,4 +23,12 @@ export interface Product {
   priceLabel: string;
   imageUri: string;
   imageAlt: string;
+  // New fields requested for seed/mock data
+  supplierName?: string;
+  supplier_name?: string; // Support both snake_case and camelCase
+  unit?: string;
+  imageUrl?: string;
+  image_url?: string; // Support both snake_case and camelCase
+  inStock?: boolean;
+  in_stock?: boolean; // Support both snake_case and camelCase
 }

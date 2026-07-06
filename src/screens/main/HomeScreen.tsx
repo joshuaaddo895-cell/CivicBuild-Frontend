@@ -1,13 +1,20 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { HomeScreenProps } from '@appTypes/navigation';
+import type { HomeMainScreenProps } from '@appTypes/navigation';
 import {
   CategoryChipList,
   DashboardHeader,
   DashboardSearchBar,
   ProductGrid,
+  ScrollToTopButton,
   SectionHeader,
   SupplierCardList,
 } from '@components/dashboard';
@@ -17,11 +24,21 @@ import {
   POPULAR_PRODUCTS,
   TRUSTED_SUPPLIERS,
 } from '@constants/marketplaceData';
+import { useCartStore } from '@store/cartStore';
+import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 
-export default function HomeScreen(_props: HomeScreenProps) {
+export default function HomeScreen({ navigation }: HomeMainScreenProps) {
+  const scrollRef = useRef<ScrollView>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const toggleSaved = useSavedStore((state) => state.toggleSaved);
+  const isSaved = useSavedStore((state) => state.isSaved);
+  const addProduct = useCartStore((state) => state.addProduct);
+  const cartItemCount = useCartStore((state) =>
+    state.items.reduce((sum, item) => sum + item.quantity, 0),
+  );
 
   const filteredProducts = useMemo(() => {
     const byCategory = filterProductsByCategory(POPULAR_PRODUCTS, selectedCategoryId);
@@ -34,14 +51,37 @@ export default function HomeScreen(_props: HomeScreenProps) {
     return byCategory.filter(
       (product) =>
         product.name.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query),
+        product.category.toLowerCase().includes(query) ||
+        (product.supplierName && product.supplierName.toLowerCase().includes(query)),
     );
   }, [searchQuery, selectedCategoryId]);
 
+  const handleAddProduct = (productId: string) => {
+    const product = POPULAR_PRODUCTS.find((entry) => entry.id === productId);
+    if (product) {
+      addProduct(product);
+    }
+  };
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setShowScrollTop(event.nativeEvent.contentOffset.y > 400);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <DashboardHeader />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <DashboardHeader
+        cartItemCount={cartItemCount}
+        onCartPress={() => navigation.navigate('Cart')}
+        onSettingsPress={() => navigation.navigate('Settings')}
+        onNotificationsPress={() => {}}
+      />
+      <ScrollView
+        ref={scrollRef}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <DashboardSearchBar value={searchQuery} onChangeText={setSearchQuery} />
 
         <CategoryChipList
@@ -56,14 +96,28 @@ export default function HomeScreen(_props: HomeScreenProps) {
             actionLabel="See All"
             onActionPress={() => {}}
           />
-          <SupplierCardList suppliers={TRUSTED_SUPPLIERS} />
+          <SupplierCardList
+            suppliers={TRUSTED_SUPPLIERS}
+            isFavorite={(id) => isSaved(id, 'supplier')}
+            onFavoritePress={(id) => toggleSaved(id, 'supplier')}
+          />
         </View>
 
         <View style={styles.section}>
           <SectionHeader title="Popular Materials" actionLabel="Filter" onActionPress={() => {}} />
-          <ProductGrid products={filteredProducts} />
+          <ProductGrid
+            products={filteredProducts}
+            isFavorite={(id) => isSaved(id, 'product')}
+            onFavoritePress={(id) => toggleSaved(id, 'product')}
+            onAddPress={handleAddProduct}
+          />
         </View>
       </ScrollView>
+      <ScrollToTopButton
+        visible={showScrollTop}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={24}
+      />
     </SafeAreaView>
   );
 }
@@ -72,6 +126,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+    position: 'relative',
   },
   scrollContent: {
     paddingHorizontal: theme.spacing.marginMobile,

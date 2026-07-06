@@ -3,11 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 
 import type { MainTabParamList } from '@appTypes/navigation';
+import HomeStackNavigator from '@navigation/HomeStackNavigator';
 import MainTabBarButton, { getMainTabIcon } from '@navigation/MainTabBarButton';
-import HomeScreen from '@screens/main/HomeScreen';
-import MessagesScreen from '@screens/main/MessagesScreen';
+import MessagesStackNavigator from '@navigation/MessagesStackNavigator';
 import ProfileScreen from '@screens/main/ProfileScreen';
-import SearchScreen from '@screens/main/SearchScreen';
+import SavedScreen from '@screens/main/SavedScreen';
 import theme from '@theme/index';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -46,9 +46,13 @@ export default function MainNavigator() {
         ),
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Search" component={SearchScreen} />
-      <Tab.Screen name="Messages" component={MessagesScreen} />
+      <Tab.Screen name="Home" component={HomeStackNavigator} options={{ title: 'Home' }} />
+      <Tab.Screen name="Saved" component={SavedScreen} options={{ title: 'Saved' }} />
+      <Tab.Screen
+        name="Messages"
+        component={MessagesStackNavigator}
+        options={{ title: 'Messages' }}
+      />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

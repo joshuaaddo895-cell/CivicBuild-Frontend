@@ -8,9 +8,15 @@ import SupplierCard from './SupplierCard';
 
 interface SupplierCardListProps {
   suppliers: Supplier[];
+  isFavorite?: (supplierId: string) => boolean;
+  onFavoritePress?: (supplierId: string) => void;
 }
 
-export default function SupplierCardList({ suppliers }: SupplierCardListProps) {
+export default function SupplierCardList({
+  suppliers,
+  isFavorite,
+  onFavoritePress,
+}: SupplierCardListProps) {
   return (
     <View style={styles.wrapper}>
       <ScrollView
@@ -19,7 +25,12 @@ export default function SupplierCardList({ suppliers }: SupplierCardListProps) {
         contentContainerStyle={styles.content}
       >
         {suppliers.map((supplier) => (
-          <SupplierCard key={supplier.id} supplier={supplier} />
+          <SupplierCard
+            key={supplier.id}
+            supplier={supplier}
+            isFavorite={isFavorite?.(supplier.id) ?? false}
+            onFavoritePress={onFavoritePress ? () => onFavoritePress(supplier.id) : undefined}
+          />
         ))}
       </ScrollView>
     </View>

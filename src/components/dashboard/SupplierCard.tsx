@@ -8,10 +8,17 @@ import theme from '@theme/index';
 
 interface SupplierCardProps {
   supplier: Supplier;
+  isFavorite?: boolean;
   onPress?: () => void;
+  onFavoritePress?: () => void;
 }
 
-export default function SupplierCard({ supplier, onPress }: SupplierCardProps) {
+export default function SupplierCard({
+  supplier,
+  isFavorite = false,
+  onPress,
+  onFavoritePress,
+}: SupplierCardProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -26,6 +33,24 @@ export default function SupplierCard({ supplier, onPress }: SupplierCardProps) {
           contentFit="cover"
           accessibilityLabel={`${supplier.name} logo`}
         />
+        {onFavoritePress ? (
+          <Pressable
+            onPress={onFavoritePress}
+            style={({ pressed }) => [
+              styles.favoriteButton,
+              isFavorite && styles.favoriteButtonActive,
+              pressed && styles.favoritePressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Save ${supplier.name} to favorites`}
+          >
+            <MaterialIcons
+              name={isFavorite ? 'favorite' : 'favorite-border'}
+              size={16}
+              color={isFavorite ? theme.colors.error : '#FFFFFF'}
+            />
+          </Pressable>
+        ) : null}
       </View>
       <View style={styles.content}>
         <View style={styles.nameRow}>
@@ -70,6 +95,27 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surfaceContainerHigh,
     overflow: 'hidden',
+    position: 'relative',
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  favoriteButtonActive: {
+    backgroundColor: theme.colors.surfaceContainerLowest,
+    borderColor: theme.colors.outlineVariant,
+  },
+  favoritePressed: {
+    transform: [{ scale: 0.95 }],
   },
   logo: {
     width: '100%',

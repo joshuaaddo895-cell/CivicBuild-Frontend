@@ -8,14 +8,27 @@ import ProductCard from './ProductCard';
 
 interface ProductGridProps {
   products: Product[];
+  isFavorite?: (productId: string) => boolean;
+  onFavoritePress?: (productId: string) => void;
+  onAddPress?: (productId: string) => void;
 }
 
-export default function ProductGrid({ products }: ProductGridProps) {
+export default function ProductGrid({
+  products,
+  isFavorite,
+  onFavoritePress,
+  onAddPress,
+}: ProductGridProps) {
   return (
     <View style={styles.grid}>
       {products.map((product) => (
         <View key={product.id} style={styles.gridItem}>
-          <ProductCard product={product} />
+          <ProductCard
+            product={product}
+            isFavorite={isFavorite?.(product.id) ?? false}
+            onFavoritePress={() => onFavoritePress?.(product.id)}
+            onQuotePress={() => onAddPress?.(product.id)}
+          />
         </View>
       ))}
     </View>
