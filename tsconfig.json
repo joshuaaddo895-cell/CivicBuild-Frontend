@@ -24,7 +24,9 @@
       "@theme/*": ["./src/theme/*"],
       "@assets/*": ["./src/assets/*"],
       "@navigation/*": ["./src/navigation/*"],
-      "@constants/*": ["./src/constants/*"]
+      "@constants/*": ["./src/constants/*"],
+      "@config/*": ["./src/config/*"],
+      "@api/*": ["./src/api/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.d.ts", "nativewind-env.d.ts"],

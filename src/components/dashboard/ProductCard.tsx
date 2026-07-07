@@ -10,6 +10,7 @@ import { formatCedis, formatUnitSuffix } from '@utils/paystackAmount';
 interface ProductCardProps {
   product: Product;
   isFavorite?: boolean;
+  onPress?: () => void;
   onQuotePress?: () => void;
   onFavoritePress?: () => void;
 }
@@ -17,13 +18,19 @@ interface ProductCardProps {
 export default function ProductCard({
   product,
   isFavorite = false,
+  onPress,
   onQuotePress,
   onFavoritePress,
 }: ProductCardProps) {
   const unitSuffix = formatUnitSuffix(product.unit);
 
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`View details for ${product.name}`}
+    >
       <View style={styles.imageWrapper}>
         <Image
           source={{ uri: product.imageUri }}
@@ -71,7 +78,7 @@ export default function ProductCard({
           </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -83,6 +90,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.xl,
     overflow: 'hidden',
     ...theme.shadows.sm,
+  },
+  cardPressed: {
+    opacity: 0.96,
   },
   imageWrapper: {
     height: 128,

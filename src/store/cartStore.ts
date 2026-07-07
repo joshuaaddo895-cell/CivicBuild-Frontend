@@ -9,7 +9,7 @@ interface CartState {
 }
 
 interface CartActions {
-  addProduct: (product: Product) => void;
+  addProduct: (product: Product, quantity?: number) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -22,19 +22,22 @@ type CartStore = CartState & CartActions;
 export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
 
-  addProduct: (product) => {
+  addProduct: (product, quantity = 1) => {
+    const safeQuantity = quantity <= 0 ? 1 : quantity;
     const existing = get().items.find((item) => item.productId === product.id);
 
     if (existing) {
       set({
         items: get().items.map((item) =>
-          item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item,
+          item.productId === product.id
+            ? { ...item, quantity: item.quantity + safeQuantity }
+            : item,
         ),
       });
       return;
     }
 
-    set({ items: [...get().items, productToCartItem(product)] });
+    set({ items: [...get().items, productToCartItem(product, safeQuantity)] });
   },
 
   removeItem: (productId) => {

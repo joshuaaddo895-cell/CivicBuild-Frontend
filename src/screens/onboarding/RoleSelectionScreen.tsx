@@ -31,7 +31,7 @@ export default function RoleSelectionScreen({ navigation }: RoleSelectionScreenP
   };
 
   const handleLogIn = () => {
-    logout();
+    void logout();
   };
 
   return (

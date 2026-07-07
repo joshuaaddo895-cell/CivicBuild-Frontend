@@ -34,7 +34,7 @@ export default ({ config }: ConfigContext) => ({
     favicon: './src/assets/images/favicon.png',
     bundler: 'metro',
   },
-  plugins: [],
+  plugins: ['expo-secure-store', 'expo-web-browser'],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL,
     appEnv: process.env.EXPO_PUBLIC_APP_ENV ?? 'development',

@@ -3,9 +3,11 @@ import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { googleSignIn as googleSignInApi, register as registerApi } from '@api/auth';
 import type { RegisterScreenProps } from '@appTypes/navigation';
 import {
   AuthDecorBackground,
+  AuthErrorBanner,
   AuthFooterLink,
   AuthHeroHeader,
   AuthInput,
@@ -18,7 +20,11 @@ import {
 } from '@components/auth';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
-import { signInWithMockAuth, signInWithMockGoogle } from '@utils/devAuth';
+import {
+  extractGoogleIdToken,
+  isGoogleSignInConfigured,
+  useGoogleAuthRequest,
+} from '@utils/googleSignIn';
 
 interface RegisterFormData {
   name: string;
@@ -29,24 +35,76 @@ interface RegisterFormData {
 
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const login = useAuthStore((state) => state.login);
+  const [, , promptGoogleAsync] = useGoogleAuthRequest();
 
   const { control, handleSubmit } = useForm<RegisterFormData>({
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
+    setErrorMessage('');
+
+    if (data.password !== data.confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
     setIsSubmitting(true);
+
     try {
-      signInWithMockAuth(login, data.email, data.name);
+      const result = await registerApi({
+        fullName: data.name,
+        email: data.email,
+        password: data.password,
+      });
+
+      if (!result.ok) {
+        setErrorMessage(result.error.message);
+        return;
+      }
+
+      navigation.navigate('Login');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleGooglePress = () => {
-    signInWithMockGoogle(login);
+  const handleGooglePress = async () => {
+    setErrorMessage('');
+
+    if (!isGoogleSignInConfigured()) {
+      setErrorMessage(
+        'Google Sign-In is not configured yet. Add Google client IDs to .env.development.',
+      );
+      return;
+    }
+
+    setIsGoogleSubmitting(true);
+
+    try {
+      const googleResult = await promptGoogleAsync();
+      const idToken = extractGoogleIdToken(googleResult);
+
+      if (!idToken) {
+        return;
+      }
+
+      const result = await googleSignInApi(idToken);
+      if (!result.ok) {
+        setErrorMessage(result.error.message);
+        return;
+      }
+
+      await login(result.data.user, result.data.accessToken, result.data.refreshToken);
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
   };
+
+  const isBusy = isSubmitting || isGoogleSubmitting;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -64,6 +122,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             <AuthScreenTopBar onClose={() => navigation.navigate('Login')} />
 
             <AuthHeroHeader title="Sign Up For Free" subtitle="Sign up in 1 minute for free!" />
+
+            <AuthErrorBanner message={errorMessage} />
 
             <View style={styles.form}>
               <Controller
@@ -134,12 +194,17 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               <AuthPrimaryButton
                 label="Sign Up"
                 loading={isSubmitting}
+                disabled={isBusy}
                 onPress={handleSubmit(onSubmit)}
               />
 
               <View style={styles.divider} />
 
-              <GoogleSignInButton onPress={handleGooglePress} />
+              <GoogleSignInButton
+                onPress={handleGooglePress}
+                disabled={isBusy}
+                loading={isGoogleSubmitting}
+              />
             </View>
 
             <AuthScreenFooter>

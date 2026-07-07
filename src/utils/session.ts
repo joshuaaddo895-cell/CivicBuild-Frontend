@@ -1,25 +1,20 @@
 import { Alert, Platform } from 'react-native';
 
-import { authApi } from '@services/endpoints';
+import { logout as logoutApi } from '@api/auth';
 import { useAuthStore } from '@store/authStore';
-import { isMockAccessToken } from '@utils/mockAuth';
-
-async function clearSession() {
-  useAuthStore.getState().logout();
-}
 
 export async function performSignOut(): Promise<void> {
-  const { accessToken } = useAuthStore.getState();
+  const { refreshToken, logout } = useAuthStore.getState();
 
-  if (accessToken && !isMockAccessToken(accessToken)) {
+  if (refreshToken) {
     try {
-      await authApi.logout();
+      await logoutApi(refreshToken);
     } catch {
       // Still clear local session if the server call fails.
     }
   }
 
-  await clearSession();
+  await logout();
 }
 
 export function confirmSignOut(onConfirm: () => void | Promise<void>) {

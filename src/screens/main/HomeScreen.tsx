@@ -108,6 +108,7 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
           <ProductGrid
             products={filteredProducts}
             isFavorite={(id) => isSaved(id, 'product')}
+            onProductPress={(id) => navigation.navigate('ProductDetail', { productId: id })}
             onFavoritePress={(id) => toggleSaved(id, 'product')}
             onAddPress={handleAddProduct}
           />

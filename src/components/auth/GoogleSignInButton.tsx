@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 
 import theme from '@theme/index';
 
@@ -8,23 +8,37 @@ import GoogleLogo from './GoogleLogo';
 interface GoogleSignInButtonProps {
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
 }
 
-export default function GoogleSignInButton({ onPress, disabled = false }: GoogleSignInButtonProps) {
+export default function GoogleSignInButton({
+  onPress,
+  disabled = false,
+  loading = false,
+}: GoogleSignInButtonProps) {
+  const isDisabled = disabled || loading;
+
   return (
     <Pressable
       style={({ pressed }) => [
         styles.button,
-        disabled && styles.buttonDisabled,
-        pressed && !disabled && styles.buttonPressed,
+        isDisabled && styles.buttonDisabled,
+        pressed && !isDisabled && styles.buttonPressed,
       ]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel="Continue with Google"
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
     >
-      <GoogleLogo size={20} />
-      <Text style={styles.label}>Continue with Google</Text>
+      {loading ? (
+        <ActivityIndicator color={theme.colors.onSurface} />
+      ) : (
+        <>
+          <GoogleLogo size={20} />
+          <Text style={styles.label}>Continue with Google</Text>
+        </>
+      )}
     </Pressable>
   );
 }

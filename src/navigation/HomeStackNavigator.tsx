@@ -7,6 +7,7 @@ import CheckoutScreen from '@screens/main/CheckoutScreen';
 import HomeScreen from '@screens/main/HomeScreen';
 import OrderConfirmationScreen from '@screens/main/OrderConfirmationScreen';
 import PaymentWebViewScreen from '@screens/main/PaymentWebViewScreen';
+import ProductDetailScreen from '@screens/main/ProductDetailScreen';
 import SettingsScreen from '@screens/main/SettingsScreen';
 import theme from '@theme/index';
 
@@ -22,6 +23,7 @@ export default function HomeStackNavigator() {
       }}
     >
       <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} />

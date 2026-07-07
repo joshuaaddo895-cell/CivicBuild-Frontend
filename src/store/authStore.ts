@@ -9,6 +9,12 @@ import type {
   DeliveryProviderStatus,
   VerificationStatus,
 } from '@appTypes/onboarding';
+import {
+  clearStoredTokens,
+  getStoredAccessToken,
+  getStoredRefreshToken,
+  saveStoredTokens,
+} from '@utils/tokenStorage';
 
 interface AuthState {
   user: User | null;
@@ -16,6 +22,7 @@ interface AuthState {
   refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasHydrated: boolean;
   accountType: AccountType | null;
   onboardingComplete: boolean;
   verificationStatus: VerificationStatus | null;
@@ -24,11 +31,13 @@ interface AuthState {
 }
 
 interface AuthActions {
-  login: (user: User, accessToken: string, refreshToken: string) => void;
-  logout: () => void;
+  login: (user: User, accessToken: string, refreshToken: string) => Promise<void>;
+  logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
-  setTokens: (accessToken: string, refreshToken: string) => void;
+  setTokens: (accessToken: string, refreshToken: string) => Promise<void>;
   setLoading: (isLoading: boolean) => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
+  restoreSessionFromSecureStorage: () => Promise<void>;
   setAccountType: (accountType: AccountType) => void;
   completeOnboarding: () => void;
   setVerificationStatus: (status: VerificationStatus) => void;
@@ -45,6 +54,7 @@ const initialState: AuthState = {
   refreshToken: null,
   isAuthenticated: false,
   isLoading: false,
+  hasHydrated: false,
   accountType: null,
   onboardingComplete: false,
   verificationStatus: null,
@@ -57,12 +67,14 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
       ...initialState,
 
-      login: (user, accessToken, refreshToken) => {
+      login: async (user, accessToken, refreshToken) => {
+        await saveStoredTokens(accessToken, refreshToken);
         set({ user, accessToken, refreshToken, isAuthenticated: true });
       },
 
-      logout: () => {
-        set({ ...initialState });
+      logout: async () => {
+        await clearStoredTokens();
+        set({ ...initialState, hasHydrated: true });
       },
 
       updateUser: (partialUser) => {
@@ -72,12 +84,39 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
-      setTokens: (accessToken, refreshToken) => {
-        set({ accessToken, refreshToken });
+      setTokens: async (accessToken, refreshToken) => {
+        await saveStoredTokens(accessToken, refreshToken);
+        set({ accessToken, refreshToken, isAuthenticated: true });
       },
 
       setLoading: (isLoading) => {
         set({ isLoading });
+      },
+
+      setHasHydrated: (hasHydrated) => {
+        set({ hasHydrated });
+      },
+
+      restoreSessionFromSecureStorage: async () => {
+        const [accessToken, refreshToken] = await Promise.all([
+          getStoredAccessToken(),
+          getStoredRefreshToken(),
+        ]);
+
+        if (accessToken && refreshToken) {
+          set({
+            accessToken,
+            refreshToken,
+            isAuthenticated: true,
+          });
+          return;
+        }
+
+        set({
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        });
       },
 
       setAccountType: (accountType) => {
@@ -115,8 +154,6 @@ export const useAuthStore = create<AuthStore>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
         accountType: state.accountType,
         onboardingComplete: state.onboardingComplete,
@@ -124,6 +161,12 @@ export const useAuthStore = create<AuthStore>()(
         deliveryProviderProfile: state.deliveryProviderProfile,
         deliveryProviderStatus: state.deliveryProviderStatus,
       }),
+      onRehydrateStorage: () => () => {
+        void (async () => {
+          await useAuthStore.getState().restoreSessionFromSecureStorage();
+          useAuthStore.getState().setHasHydrated(true);
+        })();
+      },
     },
   ),
 );
@@ -133,3 +176,4 @@ export const selectIsAuthenticated = (state: AuthStore) => state.isAuthenticated
 export const selectAccessToken = (state: AuthStore) => state.accessToken;
 export const selectAccountType = (state: AuthStore) => state.accountType;
 export const selectOnboardingComplete = (state: AuthStore) => state.onboardingComplete;
+export const selectHasHydrated = (state: AuthStore) => state.hasHydrated;

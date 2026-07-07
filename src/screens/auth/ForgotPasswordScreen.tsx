@@ -3,17 +3,18 @@ import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { forgotPassword } from '@api/auth';
 import type { ForgotPasswordScreenProps } from '@appTypes/navigation';
 import {
   AuthBackButton,
   AuthDecorBackground,
+  AuthErrorBanner,
   AuthHeroHeader,
   AuthInput,
   AuthPrimaryButton,
   ForgotPasswordIllustration,
 } from '@components/auth';
 import theme from '@theme/index';
-import { resolveDemoEmail } from '@utils/mockAuth';
 
 interface ForgotPasswordFormData {
   email: string;
@@ -21,17 +22,28 @@ interface ForgotPasswordFormData {
 
 export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const { control, handleSubmit } = useForm<ForgotPasswordFormData>({
     defaultValues: { email: '' },
   });
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
+    setErrorMessage('');
     setIsSubmitting(true);
+
     try {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      const result = await forgotPassword(data.email);
+
+      if (!result.ok && result.error.code !== 'NETWORK' && result.error.code !== 'TIMEOUT') {
+        // Backend intentionally returns generic success for anti-enumeration.
+        // Only surface connectivity failures here.
+        setErrorMessage(result.error.message);
+        return;
+      }
+
       navigation.navigate('Verify', {
-        email: resolveDemoEmail(data.email),
+        email: data.email.trim(),
         mode: 'reset',
       });
     } finally {
@@ -58,6 +70,8 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
               title="Forgot Password"
               subtitle="Enter your email address to receive a password reset link."
             />
+
+            <AuthErrorBanner message={errorMessage} />
 
             <View style={styles.form}>
               <Controller
