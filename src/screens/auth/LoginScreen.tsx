@@ -11,9 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { login as loginApi, googleSignIn as googleSignInApi } from '@api/auth';
 import type { LoginScreenProps } from '@appTypes/navigation';
 import {
   AuthDecorBackground,
+  AuthErrorBanner,
   AuthFooterLink,
   AuthHeader,
   AuthInput,
@@ -23,7 +25,11 @@ import {
 } from '@components/auth';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
-import { signInWithMockAuth, signInWithMockGoogle } from '@utils/devAuth';
+import {
+  extractGoogleIdToken,
+  isGoogleSignInConfigured,
+  useGoogleAuthRequest,
+} from '@utils/googleSignIn';
 
 interface LoginFormData {
   email: string;
@@ -32,24 +38,69 @@ interface LoginFormData {
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const login = useAuthStore((state) => state.login);
+  const [, , promptGoogleAsync] = useGoogleAuthRequest();
 
   const { control, handleSubmit } = useForm<LoginFormData>({
     defaultValues: { email: '', password: '' },
   });
 
   const onSubmit = async (data: LoginFormData) => {
+    setErrorMessage('');
     setIsSubmitting(true);
+
     try {
-      signInWithMockAuth(login, data.email);
+      const result = await loginApi({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (!result.ok) {
+        setErrorMessage(result.error.message);
+        return;
+      }
+
+      await login(result.data.user, result.data.accessToken, result.data.refreshToken);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleGooglePress = () => {
-    signInWithMockGoogle(login);
+  const handleGooglePress = async () => {
+    setErrorMessage('');
+
+    if (!isGoogleSignInConfigured()) {
+      setErrorMessage(
+        'Google Sign-In is not configured yet. Add Google client IDs to .env.development.',
+      );
+      return;
+    }
+
+    setIsGoogleSubmitting(true);
+
+    try {
+      const googleResult = await promptGoogleAsync();
+      const idToken = extractGoogleIdToken(googleResult);
+
+      if (!idToken) {
+        return;
+      }
+
+      const result = await googleSignInApi(idToken);
+      if (!result.ok) {
+        setErrorMessage(result.error.message);
+        return;
+      }
+
+      await login(result.data.user, result.data.accessToken, result.data.refreshToken);
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
   };
+
+  const isBusy = isSubmitting || isGoogleSubmitting;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -65,6 +116,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         >
           <View style={styles.inner}>
             <AuthHeader title="Sign In" subtitle="Let's build something great together." />
+
+            <AuthErrorBanner message={errorMessage} />
 
             <View style={styles.form}>
               <Controller
@@ -102,12 +155,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               <AuthPrimaryButton
                 label="Sign In"
                 loading={isSubmitting}
+                disabled={isBusy}
                 onPress={handleSubmit(onSubmit)}
               />
 
               <View style={styles.divider} />
 
-              <GoogleSignInButton onPress={handleGooglePress} />
+              <GoogleSignInButton
+                onPress={handleGooglePress}
+                disabled={isBusy}
+                loading={isGoogleSubmitting}
+              />
             </View>
 
             <AuthFooterLink

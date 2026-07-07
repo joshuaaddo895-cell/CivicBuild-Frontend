@@ -23,7 +23,7 @@ export default function PendingCompanyConfirmationScreen({
   };
 
   const handleBackToRoles = () => {
-    logout();
+    void logout();
   };
 
   return (

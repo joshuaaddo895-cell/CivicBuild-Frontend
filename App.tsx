@@ -7,6 +7,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import ErrorBoundary from '@components/ErrorBoundary';
 import { useAppFonts } from '@hooks/useAppFonts';
 import RootNavigator from '@navigation/RootNavigator';
+import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 
 import './global.css';
@@ -26,8 +27,9 @@ const queryClient = new QueryClient({
 
 export default function App() {
   const fontsLoaded = useAppFonts();
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || !hasHydrated) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={theme.colors.primary} />

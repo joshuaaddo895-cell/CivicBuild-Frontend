@@ -31,4 +31,11 @@ export interface Product {
   image_url?: string; // Support both snake_case and camelCase
   inStock?: boolean;
   in_stock?: boolean; // Support both snake_case and camelCase
+  supplierId?: string;
+  highlight?: string;
+  description?: string;
+  brand?: string;
+  spec?: string;
+  size?: string;
+  deliveryEstimate?: string;
 }

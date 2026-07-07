@@ -1,20 +1,35 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
+import { getApiBaseUrl, getApiTimeoutMs } from '@config/api';
 import { useAuthStore } from '@store/authStore';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+const AUTH_PATHS_WITHOUT_REFRESH = [
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/google',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/logout',
+  '/api/auth/refresh',
+];
 
-// ─── Axios Instance ───────────────────────────────────────────────────────────
+function shouldSkipRefresh(url?: string): boolean {
+  if (!url) {
+    return false;
+  }
+
+  return AUTH_PATHS_WITHOUT_REFRESH.some((path) => url.includes(path));
+}
+
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
-  timeout: 15000,
+  baseURL: getApiBaseUrl(),
+  timeout: getApiTimeoutMs(),
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
 });
 
-// ─── Request Interceptor ──────────────────────────────────────────────────────
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().accessToken;
@@ -26,7 +41,6 @@ apiClient.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error),
 );
 
-// ─── Response Interceptor ─────────────────────────────────────────────────────
 let isRefreshing = false;
 let failedQueue: {
   resolve: (value: string) => void;
@@ -49,49 +63,68 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    // Handle 401 — attempt token refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        return new Promise<string>((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return apiClient(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      const { refreshToken, setTokens, logout } = useAuthStore.getState();
-
-      if (!refreshToken) {
-        logout();
-        return Promise.reject(error);
-      }
-
-      try {
-        const response = await axios.post<{ accessToken: string; refreshToken: string }>(
-          `${BASE_URL}/auth/refresh`,
-          { refreshToken },
-        );
-        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data;
-        setTokens(newAccessToken, newRefreshToken);
-        processQueue(null, newAccessToken);
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        logout();
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
+    if (
+      error.response?.status !== 401 ||
+      originalRequest._retry ||
+      shouldSkipRefresh(originalRequest.url)
+    ) {
+      return Promise.reject(error);
     }
 
-    return Promise.reject(error);
+    if (isRefreshing) {
+      return new Promise<string>((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      })
+        .then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return apiClient(originalRequest);
+        })
+        .catch((queueError) => Promise.reject(queueError));
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+
+    const { refreshToken: storedRefreshToken, setTokens, logout } = useAuthStore.getState();
+
+    if (!storedRefreshToken) {
+      isRefreshing = false;
+      await logout();
+      return Promise.reject(error);
+    }
+
+    try {
+      const response = await axios.post<{
+        success: boolean;
+        data: { accessToken: string; refreshToken: string };
+      }>(
+        `${getApiBaseUrl()}/api/auth/refresh`,
+        { refreshToken: storedRefreshToken },
+        {
+          timeout: getApiTimeoutMs(),
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+        },
+      );
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error('Token refresh failed.');
+      }
+
+      const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data.data;
+      await setTokens(newAccessToken, newRefreshToken);
+      processQueue(null, newAccessToken);
+      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+      return apiClient(originalRequest);
+    } catch (refreshError) {
+      processQueue(refreshError, null);
+      await logout();
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
   },
 );
 

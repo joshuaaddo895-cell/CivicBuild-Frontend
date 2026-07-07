@@ -1,4 +1,5 @@
 import type { MarketplaceCategory, Product, Supplier } from '@appTypes/marketplace';
+import { enrichProduct } from '@utils/productEnrichment';
 
 import { MOCK_PRODUCTS } from './mockProducts';
 
@@ -40,7 +41,7 @@ export const TRUSTED_SUPPLIERS: Supplier[] = [
   },
 ];
 
-export const POPULAR_PRODUCTS: Product[] = MOCK_PRODUCTS;
+export const POPULAR_PRODUCTS: Product[] = MOCK_PRODUCTS.map(enrichProduct);
 
 export function filterProductsByCategory(products: Product[], categoryId: string): Product[] {
   if (categoryId === 'all') {

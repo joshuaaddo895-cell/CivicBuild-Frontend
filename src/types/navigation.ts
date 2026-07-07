@@ -45,6 +45,7 @@ export type HomeStackParamList = {
     amountPaid: number;
     deliveryAddress: string;
   };
+  ProductDetail: { productId: string };
 };
 
 // ─── Messages Stack ─────────────────────────────────────────────────────────────
@@ -136,6 +137,14 @@ export type PaymentWebViewScreenProps = CompositeScreenProps<
 
 export type OrderConfirmationScreenProps = CompositeScreenProps<
   NativeStackScreenProps<HomeStackParamList, 'OrderConfirmation'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type ProductDetailScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<HomeStackParamList, 'ProductDetail'>,
   CompositeScreenProps<
     BottomTabScreenProps<MainTabParamList, 'Home'>,
     NativeStackScreenProps<RootStackParamList>

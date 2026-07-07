@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { forgotPassword } from '@api/auth';
 import type { VerifyScreenProps } from '@appTypes/navigation';
 import {
   AuthDecorBackground,
@@ -35,8 +36,10 @@ export default function VerifyScreen({ route, navigation }: VerifyScreenProps) {
       if (mode === 'signup') {
         await authApi.resendVerification(email);
       } else {
-        // No password-reset resend endpoint yet — UI-only delay.
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const result = await forgotPassword(email);
+        if (!result.ok && (result.error.code === 'NETWORK' || result.error.code === 'TIMEOUT')) {
+          throw new Error(result.error.message);
+        }
       }
       setShowSuccessToast(true);
     } catch {
