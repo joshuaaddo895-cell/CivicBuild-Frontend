@@ -19,17 +19,21 @@ import {
   SupplierCardList,
 } from '@components/dashboard';
 import {
+  DASHBOARD_SUPPLIERS,
   filterProductsByCategory,
   MARKETPLACE_CATEGORIES,
   POPULAR_PRODUCTS,
-  TRUSTED_SUPPLIERS,
 } from '@constants/marketplaceData';
+import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
+import { getUserInitials } from '@utils/userInitials';
 
 export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const user = useAuthStore((state) => state.user);
+  const deliveryProviderProfile = useAuthStore((state) => state.deliveryProviderProfile);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
@@ -39,6 +43,13 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const cartItemCount = useCartStore((state) =>
     state.items.reduce((sum, item) => sum + item.quantity, 0),
   );
+
+  const userInitials = getUserInitials(user, deliveryProviderProfile?.fullName);
+  const userAvatarUri = user?.avatar ?? deliveryProviderProfile?.profileImageUri ?? null;
+
+  const handleOpenProfile = () => {
+    navigation.getParent()?.navigate('Profile', { screen: 'ProfileMain' });
+  };
 
   const filteredProducts = useMemo(() => {
     const byCategory = filterProductsByCategory(POPULAR_PRODUCTS, selectedCategoryId);
@@ -71,6 +82,9 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <DashboardHeader
         cartItemCount={cartItemCount}
+        userInitials={userInitials}
+        userAvatarUri={userAvatarUri}
+        onAvatarPress={handleOpenProfile}
         onCartPress={() => navigation.navigate('Cart')}
         onSettingsPress={() => navigation.navigate('Settings')}
         onNotificationsPress={() => {}}
@@ -94,10 +108,10 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
           <SectionHeader
             title="Trusted Suppliers Near You"
             actionLabel="See All"
-            onActionPress={() => {}}
+            onActionPress={() => navigation.navigate('AllSuppliers')}
           />
           <SupplierCardList
-            suppliers={TRUSTED_SUPPLIERS}
+            suppliers={DASHBOARD_SUPPLIERS}
             isFavorite={(id) => isSaved(id, 'supplier')}
             onFavoritePress={(id) => toggleSaved(id, 'supplier')}
           />

@@ -8,6 +8,7 @@ import type { ProductDetailScreenProps } from '@appTypes/navigation';
 import { AuthPrimaryButton } from '@components/auth';
 import ResendSuccessToast from '@components/auth/ResendSuccessToast';
 import { getCategoryTheme } from '@constants/categoryTheme';
+import { getMockReviewSummary } from '@constants/mockReviews';
 import { useCartStore } from '@store/cartStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
@@ -124,6 +125,10 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
 
   const categoryTheme = product ? getCategoryTheme(product.category) : null;
   const supplier = product ? resolveSupplierForProduct(product) : undefined;
+  const productReviewSummary = useMemo(
+    () => getMockReviewSummary('product', productId),
+    [productId],
+  );
   const unitSuffix = product ? formatUnitSuffix(product.unit) : null;
   const useNumericInput = product ? usesNumericQuantityInput(product.unit) : false;
   const inStock = product?.inStock ?? product?.in_stock ?? true;
@@ -164,6 +169,30 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
 
     navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
   }, [navigation, product]);
+
+  const handleOpenProductReviews = useCallback(() => {
+    if (!product) {
+      return;
+    }
+
+    navigation.navigate('Reviews', {
+      subjectType: 'product',
+      subjectId: productId,
+      subjectName: product.name,
+    });
+  }, [navigation, product, productId]);
+
+  const handleOpenSupplierReviews = useCallback(() => {
+    if (!supplier) {
+      return;
+    }
+
+    navigation.navigate('Reviews', {
+      subjectType: 'supplier',
+      subjectId: supplier.id,
+      subjectName: supplier.name,
+    });
+  }, [navigation, supplier]);
 
   const parsedQuantity = useMemo(() => {
     if (!useNumericInput) {
@@ -263,6 +292,18 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
                 </View>
               ) : null}
               <Text style={styles.productName}>{product.name}</Text>
+              <Pressable
+                onPress={handleOpenProductReviews}
+                style={({ pressed }) => [styles.ratingRow, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${productReviewSummary.averageRating.toFixed(1)} stars, ${productReviewSummary.totalCount} reviews`}
+              >
+                <MaterialIcons name="star" size={16} color={theme.colors.primary} />
+                <Text style={styles.ratingText}>
+                  {productReviewSummary.averageRating.toFixed(1)} ·{' '}
+                  {productReviewSummary.totalCount} reviews
+                </Text>
+              </Pressable>
             </View>
             <Pressable
               onPress={handleToggleSaved}
@@ -350,11 +391,23 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
                     </View>
                   ) : null}
                 </View>
-                <Text style={styles.supplierCardSubtitle}>
-                  {supplier
-                    ? `${supplier.rating.toFixed(1)} ★ · ${supplier.reviewCount} reviews · ${supplier.distanceKm.toFixed(1)} km away`
-                    : 'Contact this supplier for quotes and delivery'}
-                </Text>
+                <Pressable
+                  onPress={supplier ? handleOpenSupplierReviews : undefined}
+                  disabled={!supplier}
+                  style={({ pressed }) => [pressed && supplier && styles.pressed]}
+                  accessibilityRole={supplier ? 'button' : undefined}
+                  accessibilityLabel={
+                    supplier
+                      ? `${supplier.rating.toFixed(1)} stars, ${supplier.reviewCount} supplier reviews`
+                      : undefined
+                  }
+                >
+                  <Text style={[styles.supplierCardSubtitle, supplier && styles.linkText]}>
+                    {supplier
+                      ? `${supplier.rating.toFixed(1)} ★ · ${supplier.reviewCount} reviews · ${supplier.distanceKm.toFixed(1)} km away`
+                      : 'Contact this supplier for quotes and delivery'}
+                  </Text>
+                </Pressable>
               </View>
             </View>
             <Pressable
@@ -510,6 +563,18 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.headlineMd,
     color: theme.colors.onSurface,
     fontWeight: '700',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: theme.spacing.xs,
+  },
+  ratingText: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
   titleFavoriteButton: {
     padding: theme.spacing.xs,
@@ -678,6 +743,13 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.bodySm,
     color: theme.colors.onSurfaceVariant,
   },
+  linkText: {
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.75,
+  },
   messageButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -801,9 +873,6 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.bodyMd,
     color: theme.colors.onPrimary,
     fontWeight: '700',
-  },
-  pressed: {
-    opacity: 0.7,
   },
   notFound: {
     flex: 1,

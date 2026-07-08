@@ -28,6 +28,11 @@ export interface ResetPasswordInput {
   newPassword: string;
 }
 
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface AuthSession {
   user: User;
   accessToken: string;
@@ -129,6 +134,21 @@ export async function forgotPassword(email: string): Promise<AuthResult<MessageR
       })
       .then((response) => ({
         message: response.data.message,
+      })),
+  );
+}
+
+export async function changePassword(
+  input: ChangePasswordInput,
+): Promise<AuthResult<MessageResult>> {
+  return toAuthResult(
+    apiClient
+      .post<{ success: boolean; message: string; data: null }>('/api/auth/change-password', {
+        currentPassword: input.currentPassword,
+        newPassword: input.newPassword,
+      })
+      .then((response) => ({
+        message: response.data.message || 'Password updated successfully.',
       })),
   );
 }

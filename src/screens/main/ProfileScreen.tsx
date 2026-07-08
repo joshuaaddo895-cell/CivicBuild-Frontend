@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { ProfileScreenProps } from '@appTypes/navigation';
+import UserAvatarBadge from '@components/dashboard/UserAvatarBadge';
 import { findConstructionAgencyById } from '@constants/constructionAgencies';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
@@ -15,8 +16,9 @@ import {
   getVerificationStatusLabel,
 } from '@utils/roleLabels';
 import { confirmSignOut, performSignOut } from '@utils/session';
+import { getUserInitials } from '@utils/userInitials';
 
-export default function ProfileScreen(_props: ProfileScreenProps) {
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const user = useAuthStore((state) => state.user);
   const accountType = useAuthStore((state) => state.accountType);
   const verificationStatus = useAuthStore((state) => state.verificationStatus);
@@ -24,16 +26,24 @@ export default function ProfileScreen(_props: ProfileScreenProps) {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const displayName = deliveryProviderProfile?.fullName?.trim() || formatUserDisplayName(user);
-  const profileImageUri = deliveryProviderProfile?.profileImageUri ?? null;
-  const avatarInitial = displayName[0]?.toUpperCase() ?? '?';
+  const profileImageUri = user?.avatar ?? deliveryProviderProfile?.profileImageUri ?? null;
+  const userInitials = getUserInitials(user, displayName);
   const associatedAgency = findConstructionAgencyById(
     deliveryProviderProfile?.constructionAgencyId ?? null,
   );
 
   const menuItems = [
-    { icon: 'edit' as const, label: 'Edit Profile', onPress: () => {} },
+    {
+      icon: 'edit' as const,
+      label: 'Edit Profile',
+      onPress: () => navigation.navigate('EditProfile'),
+    },
     { icon: 'star-outline' as const, label: 'My Reviews / Ratings', onPress: () => {} },
-    { icon: 'help-outline' as const, label: 'Help & Support', onPress: () => {} },
+    {
+      icon: 'help-outline' as const,
+      label: 'Help & Support',
+      onPress: () => navigation.navigate('HelpSupport'),
+    },
   ];
 
   const handleLogout = () => {
@@ -55,18 +65,8 @@ export default function ProfileScreen(_props: ProfileScreenProps) {
         </Text>
 
         <View style={styles.profileCard}>
-          <View style={styles.avatarLarge}>
-            {profileImageUri ? (
-              <Image
-                source={{ uri: profileImageUri }}
-                style={styles.avatarImage}
-                contentFit="cover"
-                accessibilityLabel="Profile photo"
-              />
-            ) : (
-              <Text style={styles.avatarText}>{avatarInitial}</Text>
-            )}
-          </View>
+          <UserAvatarBadge initials={userInitials} imageUri={profileImageUri} size={88} />
+
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.email}>{user?.email ?? ''}</Text>
 
@@ -182,26 +182,6 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.outlineVariant,
     ...theme.shadows.sm,
     gap: theme.spacing.sm,
-  },
-  avatarLarge: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: theme.colors.primaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.xs,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarText: {
-    color: theme.colors.onPrimary,
-    fontFamily: theme.typography.fontFamily.headline,
-    fontSize: theme.typography.fontSize.headlineLg,
-    lineHeight: theme.typography.lineHeight.headlineLg,
   },
   name: {
     fontFamily: theme.typography.fontFamily.headline,

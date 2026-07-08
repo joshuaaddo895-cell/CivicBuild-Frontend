@@ -29,6 +29,7 @@ export type AuthStackParamList = {
 export type HomeStackParamList = {
   HomeMain: undefined;
   Settings: undefined;
+  ChangePassword: undefined;
   Cart: undefined;
   Checkout: undefined;
   PaymentWebView: {
@@ -46,6 +47,12 @@ export type HomeStackParamList = {
     deliveryAddress: string;
   };
   ProductDetail: { productId: string };
+  Reviews: {
+    subjectType: 'product' | 'supplier';
+    subjectId: string;
+    subjectName: string;
+  };
+  AllSuppliers: undefined;
 };
 
 // ─── Messages Stack ─────────────────────────────────────────────────────────────
@@ -55,11 +62,17 @@ export type MessagesStackParamList = {
 };
 
 // ─── Main Tab Stack ───────────────────────────────────────────────────────────
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  EditProfile: undefined;
+  HelpSupport: undefined;
+};
+
 export type MainTabParamList = {
   Home: NavigatorScreenParams<HomeStackParamList>;
   Saved: undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList>;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 
 // ─── Root Stack ───────────────────────────────────────────────────────────────
@@ -111,6 +124,14 @@ export type SettingsScreenProps = CompositeScreenProps<
   >
 >;
 
+export type ChangePasswordScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<HomeStackParamList, 'ChangePassword'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
 export type CartScreenProps = CompositeScreenProps<
   NativeStackScreenProps<HomeStackParamList, 'Cart'>,
   CompositeScreenProps<
@@ -151,6 +172,22 @@ export type ProductDetailScreenProps = CompositeScreenProps<
   >
 >;
 
+export type ReviewsScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<HomeStackParamList, 'Reviews'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AllSuppliersScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<HomeStackParamList, 'AllSuppliers'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
 export type SavedScreenProps = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Saved'>,
   NativeStackScreenProps<RootStackParamList>
@@ -173,8 +210,27 @@ export type ConversationDetailScreenProps = CompositeScreenProps<
 >;
 
 export type ProfileScreenProps = CompositeScreenProps<
-  BottomTabScreenProps<MainTabParamList, 'Profile'>,
-  NativeStackScreenProps<RootStackParamList>
+  NativeStackScreenProps<ProfileStackParamList, 'ProfileMain'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Profile'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type HelpSupportScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<ProfileStackParamList, 'HelpSupport'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Profile'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type EditProfileScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<ProfileStackParamList, 'EditProfile'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Profile'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
 >;
 
 // ─── Typed Navigation Props ───────────────────────────────────────────────────

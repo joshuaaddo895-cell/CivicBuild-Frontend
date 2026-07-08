@@ -14,8 +14,20 @@ const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 function getInitialOnboardingRoute(): keyof OnboardingStackParamList {
   const { accountType, deliveryProviderStatus } = useAuthStore.getState();
 
+  if (!accountType) {
+    return 'RoleSelection';
+  }
+
   if (accountType === 'delivery' && deliveryProviderStatus === 'pending_company_confirmation') {
     return 'PendingCompanyConfirmation';
+  }
+
+  if (accountType === 'delivery') {
+    return 'DeliveryProviderSetup';
+  }
+
+  if (accountType === 'construction') {
+    return 'Verification';
   }
 
   return 'RoleSelection';

@@ -6,6 +6,7 @@ import { WebView, type WebViewNavigation } from 'react-native-webview';
 
 import type { PaymentWebViewScreenProps } from '@appTypes/navigation';
 import { AuthPrimaryButton } from '@components/auth';
+import { verifyOrderPayment } from '@services/checkoutService';
 import { useCartStore } from '@store/cartStore';
 import theme from '@theme/index';
 import {
@@ -14,18 +15,15 @@ import {
   parsePaymentCallbackUrl,
 } from '@utils/mockCheckout';
 import { formatCedis } from '@utils/paystackAmount';
+import { isValidPaymentUrl } from '@utils/userInitials';
 
 export default function PaymentWebViewScreen({ navigation, route }: PaymentWebViewScreenProps) {
   const { authorizationUrl, orderId, orderNumber, amountPaid, deliveryAddress } = route.params;
   const clearCart = useCartStore((state) => state.clearCart);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
-  const completePayment = useCallback(() => {
-    if (isCompleting) {
-      return;
-    }
-
-    setIsCompleting(true);
+  const finishOrder = useCallback(() => {
     clearCart();
     navigation.replace('OrderConfirmation', {
       orderId,
@@ -33,7 +31,38 @@ export default function PaymentWebViewScreen({ navigation, route }: PaymentWebVi
       amountPaid,
       deliveryAddress,
     });
-  }, [amountPaid, clearCart, deliveryAddress, isCompleting, navigation, orderId, orderNumber]);
+  }, [amountPaid, clearCart, deliveryAddress, navigation, orderId, orderNumber]);
+
+  const confirmPaymentWithBackend = useCallback(async () => {
+    if (isCompleting) {
+      return;
+    }
+
+    setIsCompleting(true);
+    setVerifyError(null);
+
+    if (isMockCheckoutUrl(authorizationUrl)) {
+      finishOrder();
+      return;
+    }
+
+    try {
+      const order = await verifyOrderPayment(orderId);
+
+      if (order.status !== 'PAID') {
+        setVerifyError('Payment is still processing. Tap retry in a moment.');
+        setIsCompleting(false);
+        return;
+      }
+
+      finishOrder();
+    } catch {
+      setVerifyError(
+        'Payment received but verification is pending. Tap retry or check your orders.',
+      );
+      setIsCompleting(false);
+    }
+  }, [authorizationUrl, finishOrder, isCompleting, orderId]);
 
   const handleNavigationChange = useCallback(
     (event: WebViewNavigation) => {
@@ -42,12 +71,45 @@ export default function PaymentWebViewScreen({ navigation, route }: PaymentWebVi
       }
 
       const parsed = parsePaymentCallbackUrl(event.url);
-      if (parsed.reference || parsed.orderId) {
-        completePayment();
+      if (
+        parsed.reference ||
+        parsed.orderId ||
+        event.url.includes('/api/payments/paystack/callback')
+      ) {
+        void confirmPaymentWithBackend();
       }
     },
-    [completePayment],
+    [confirmPaymentWithBackend],
   );
+
+  if (!isValidPaymentUrl(authorizationUrl)) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <MaterialIcons name="arrow-back" size={24} color={theme.colors.onSurface} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Payment Error</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.mockContent}>
+          <MaterialIcons name="error-outline" size={48} color={theme.colors.error} />
+          <Text style={styles.mockTitle}>Unable to load payment page</Text>
+          <Text style={styles.mockSubtitle}>Please try again from checkout.</Text>
+          <AuthPrimaryButton
+            label="Go Back"
+            showArrow={false}
+            onPress={() => navigation.goBack()}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (isMockCheckoutUrl(authorizationUrl)) {
     return (
@@ -82,7 +144,7 @@ export default function PaymentWebViewScreen({ navigation, route }: PaymentWebVi
             label="Simulate Successful Payment"
             showArrow={false}
             loading={isCompleting}
-            onPress={completePayment}
+            onPress={() => void confirmPaymentWithBackend()}
             disabled={isCompleting}
           />
         </View>
@@ -115,6 +177,19 @@ export default function PaymentWebViewScreen({ navigation, route }: PaymentWebVi
           </View>
         )}
       />
+
+      {verifyError ? (
+        <View style={styles.verifyErrorBar}>
+          <Text style={styles.verifyErrorText}>{verifyError}</Text>
+          <AuthPrimaryButton
+            label="Retry Verification"
+            showArrow={false}
+            loading={isCompleting}
+            onPress={() => void confirmPaymentWithBackend()}
+            disabled={isCompleting}
+          />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -198,5 +273,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.background,
+  },
+  verifyErrorBar: {
+    paddingHorizontal: theme.spacing.marginMobile,
+    paddingVertical: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.outlineVariant,
+    backgroundColor: theme.colors.surface,
+    gap: theme.spacing.sm,
+  },
+  verifyErrorText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.error,
+    textAlign: 'center',
   },
 });

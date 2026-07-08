@@ -7,12 +7,13 @@ import type { CheckoutFormData } from '@appTypes/cart';
 import type { CheckoutScreenProps } from '@appTypes/navigation';
 import { AuthInput, AuthPrimaryButton } from '@components/auth';
 import { GHANA_REGIONS } from '@constants/ghanaRegions';
-import { initializeCheckout } from '@services/checkoutService';
+import { CheckoutError, initializeCheckout } from '@services/checkoutService';
 import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
 import theme from '@theme/index';
 import { formatCartLinePricing, formatCedis } from '@utils/paystackAmount';
 import { isValidGhanaPhone } from '@utils/phoneValidation';
+import { isValidPaymentUrl } from '@utils/userInitials';
 
 const PAYMENT_CHANNELS = [
   { id: 'card', label: 'Card', icon: 'credit-card' as const },
@@ -22,6 +23,8 @@ const PAYMENT_CHANNELS = [
 
 export default function CheckoutScreen({ navigation }: CheckoutScreenProps) {
   const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const items = useCartStore((state) => state.items);
   const subtotal = useCartStore((state) => state.getSubtotal());
 
@@ -77,6 +80,11 @@ export default function CheckoutScreen({ navigation }: CheckoutScreenProps) {
   };
 
   const handlePayNow = async () => {
+    if (!isAuthenticated || !accessToken) {
+      setError('Please sign in to complete checkout.');
+      return;
+    }
+
     const customer = validateForm();
     if (!customer || items.length === 0) {
       return;
@@ -94,6 +102,11 @@ export default function CheckoutScreen({ navigation }: CheckoutScreenProps) {
         customer,
       });
 
+      if (!isValidPaymentUrl(result.authorizationUrl) || !result.orderId) {
+        setError('Checkout did not return a valid payment URL. Please try again.');
+        return;
+      }
+
       navigation.navigate('PaymentWebView', {
         authorizationUrl: result.authorizationUrl,
         orderId: result.orderId,
@@ -102,8 +115,12 @@ export default function CheckoutScreen({ navigation }: CheckoutScreenProps) {
         amountPaid: subtotal,
         deliveryAddress: deliveryAddressPreview,
       });
-    } catch {
-      setError('Unable to start checkout. Please try again.');
+    } catch (error) {
+      if (error instanceof CheckoutError) {
+        setError(error.message);
+      } else {
+        setError('Unable to start checkout. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -8,6 +8,7 @@ import theme from '@theme/index';
 
 interface SupplierCardProps {
   supplier: Supplier;
+  layout?: 'carousel' | 'list';
   isFavorite?: boolean;
   onPress?: () => void;
   onFavoritePress?: () => void;
@@ -15,6 +16,7 @@ interface SupplierCardProps {
 
 export default function SupplierCard({
   supplier,
+  layout = 'carousel',
   isFavorite = false,
   onPress,
   onFavoritePress,
@@ -22,7 +24,11 @@ export default function SupplierCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.card,
+        layout === 'list' && styles.cardList,
+        pressed && styles.cardPressed,
+      ]}
       accessibilityRole="button"
       accessibilityLabel={`${supplier.name}, rated ${supplier.rating}, ${supplier.distanceKm} kilometers away`}
     >
@@ -85,6 +91,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.md,
     ...theme.shadows.sm,
+  },
+  cardList: {
+    width: '100%',
   },
   cardPressed: {
     transform: [{ scale: 0.98 }],

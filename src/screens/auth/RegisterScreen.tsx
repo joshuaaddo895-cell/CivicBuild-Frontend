@@ -3,7 +3,11 @@ import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { googleSignIn as googleSignInApi, register as registerApi } from '@api/auth';
+import {
+  googleSignIn as googleSignInApi,
+  login as loginApi,
+  register as registerApi,
+} from '@api/auth';
 import type { RegisterScreenProps } from '@appTypes/navigation';
 import {
   AuthDecorBackground,
@@ -66,7 +70,24 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         return;
       }
 
-      navigation.navigate('Login');
+      const loginResult = await loginApi({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (!loginResult.ok) {
+        setErrorMessage(
+          loginResult.error.message || 'Account created. Please sign in with your credentials.',
+        );
+        navigation.navigate('Login');
+        return;
+      }
+
+      await login(
+        loginResult.data.user,
+        loginResult.data.accessToken,
+        loginResult.data.refreshToken,
+      );
     } finally {
       setIsSubmitting(false);
     }

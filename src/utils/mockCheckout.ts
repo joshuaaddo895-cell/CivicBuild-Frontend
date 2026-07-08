@@ -4,8 +4,7 @@ import { cedisToPesewas } from '@utils/paystackAmount';
 export const MOCK_CHECKOUT_SCHEME = 'civicbuild://payment/callback';
 
 export function shouldUseMockCheckout(): boolean {
-  const appEnv = process.env.EXPO_PUBLIC_APP_ENV ?? 'development';
-  return appEnv === 'development' || process.env.EXPO_PUBLIC_USE_MOCK_CHECKOUT === 'true';
+  return process.env.EXPO_PUBLIC_USE_MOCK_CHECKOUT === 'true';
 }
 
 function generateOrderNumber(): string {
@@ -27,26 +26,41 @@ export function mockInitializeCheckout(payload: CheckoutRequest): CheckoutInitia
   };
 }
 
-export function isMockCheckoutUrl(url: string): boolean {
+export function isMockCheckoutUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') {
+    return false;
+  }
+
   return url.startsWith(MOCK_CHECKOUT_SCHEME);
 }
 
-export function isPaymentCallbackUrl(url: string): boolean {
+export function isPaymentCallbackUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') {
+    return false;
+  }
+
   if (isMockCheckoutUrl(url)) {
     return true;
   }
 
   const lower = url.toLowerCase();
   return (
-    lower.includes('reference=') || lower.includes('trxref=') || lower.includes('/payment/callback')
+    lower.includes('/api/payments/paystack/callback') ||
+    lower.includes('reference=') ||
+    lower.includes('trxref=') ||
+    lower.includes('/payment/callback')
   );
 }
 
-export function parsePaymentCallbackUrl(url: string): {
+export function parsePaymentCallbackUrl(url: string | null | undefined): {
   reference?: string;
   orderId?: string;
   orderNumber?: string;
 } {
+  if (!url || typeof url !== 'string') {
+    return {};
+  }
+
   try {
     const parsed = new URL(url.replace('civicbuild://', 'https://civicbuild.app/'));
     return {

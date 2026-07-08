@@ -13,6 +13,7 @@ export interface Supplier {
   reviewCount: number;
   distanceKm: number;
   verified: boolean;
+  categoryId: string;
 }
 
 export interface Product {

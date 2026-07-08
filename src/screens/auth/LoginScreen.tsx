@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
   KeyboardAvoidingView,
@@ -22,6 +22,7 @@ import {
   AuthPrimaryButton,
   GoogleSignInButton,
   PasswordInput,
+  ResendSuccessToast,
 } from '@components/auth';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
@@ -30,6 +31,7 @@ import {
   isGoogleSignInConfigured,
   useGoogleAuthRequest,
 } from '@utils/googleSignIn';
+import { consumeAccountDeletedToastFlag } from '@utils/session';
 
 interface LoginFormData {
   email: string;
@@ -40,8 +42,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showDeletedToast, setShowDeletedToast] = useState(false);
   const login = useAuthStore((state) => state.login);
   const [, , promptGoogleAsync] = useGoogleAuthRequest();
+
+  useEffect(() => {
+    void consumeAccountDeletedToastFlag().then((shouldShow) => {
+      if (shouldShow) {
+        setShowDeletedToast(true);
+      }
+    });
+  }, []);
 
   const { control, handleSubmit } = useForm<LoginFormData>({
     defaultValues: { email: '', password: '' },
@@ -118,6 +129,12 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             <AuthHeader title="Sign In" subtitle="Let's build something great together." />
 
             <AuthErrorBanner message={errorMessage} />
+
+            <ResendSuccessToast
+              message="Your account has been deleted."
+              visible={showDeletedToast}
+              onHide={() => setShowDeletedToast(false)}
+            />
 
             <View style={styles.form}>
               <Controller

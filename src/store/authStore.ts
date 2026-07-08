@@ -16,6 +16,14 @@ import {
   saveStoredTokens,
 } from '@utils/tokenStorage';
 
+interface OnboardingProfile {
+  accountType: AccountType | null;
+  onboardingComplete: boolean;
+  verificationStatus: VerificationStatus | null;
+  deliveryProviderProfile: DeliveryProviderProfile | null;
+  deliveryProviderStatus: DeliveryProviderStatus;
+}
+
 interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -28,11 +36,12 @@ interface AuthState {
   verificationStatus: VerificationStatus | null;
   deliveryProviderProfile: DeliveryProviderProfile | null;
   deliveryProviderStatus: DeliveryProviderStatus;
+  onboardingProfilesByUserId: Record<string, OnboardingProfile>;
 }
 
 interface AuthActions {
   login: (user: User, accessToken: string, refreshToken: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (options?: { wipeOnboarding?: boolean }) => Promise<void>;
   updateUser: (user: Partial<User>) => void;
   setTokens: (accessToken: string, refreshToken: string) => Promise<void>;
   setLoading: (isLoading: boolean) => void;
@@ -48,13 +57,14 @@ interface AuthActions {
 
 type AuthStore = AuthState & AuthActions;
 
-const initialState: AuthState = {
-  user: null,
-  accessToken: null,
-  refreshToken: null,
-  isAuthenticated: false,
-  isLoading: false,
-  hasHydrated: false,
+const emptyOnboardingState: Pick<
+  AuthState,
+  | 'accountType'
+  | 'onboardingComplete'
+  | 'verificationStatus'
+  | 'deliveryProviderProfile'
+  | 'deliveryProviderStatus'
+> = {
   accountType: null,
   onboardingComplete: false,
   verificationStatus: null,
@@ -62,93 +72,175 @@ const initialState: AuthState = {
   deliveryProviderStatus: 'none',
 };
 
+const initialState: AuthState = {
+  user: null,
+  accessToken: null,
+  refreshToken: null,
+  isAuthenticated: false,
+  isLoading: false,
+  hasHydrated: false,
+  ...emptyOnboardingState,
+  onboardingProfilesByUserId: {},
+};
+
+function snapshotOnboarding(state: AuthState): OnboardingProfile {
+  return {
+    accountType: state.accountType,
+    onboardingComplete: state.onboardingComplete,
+    verificationStatus: state.verificationStatus,
+    deliveryProviderProfile: state.deliveryProviderProfile,
+    deliveryProviderStatus: state.deliveryProviderStatus,
+  };
+}
+
+function applyOnboardingProfile(profile: OnboardingProfile | undefined) {
+  if (!profile) {
+    return emptyOnboardingState;
+  }
+
+  return {
+    accountType: profile.accountType,
+    onboardingComplete: profile.onboardingComplete,
+    verificationStatus: profile.verificationStatus,
+    deliveryProviderProfile: profile.deliveryProviderProfile,
+    deliveryProviderStatus: profile.deliveryProviderStatus,
+  };
+}
+
 export const useAuthStore = create<AuthStore>()(
   persist(
-    (set, get) => ({
-      ...initialState,
-
-      login: async (user, accessToken, refreshToken) => {
-        await saveStoredTokens(accessToken, refreshToken);
-        set({ user, accessToken, refreshToken, isAuthenticated: true });
-      },
-
-      logout: async () => {
-        await clearStoredTokens();
-        set({ ...initialState, hasHydrated: true });
-      },
-
-      updateUser: (partialUser) => {
-        const current = get().user;
-        if (current) {
-          set({ user: { ...current, ...partialUser } });
-        }
-      },
-
-      setTokens: async (accessToken, refreshToken) => {
-        await saveStoredTokens(accessToken, refreshToken);
-        set({ accessToken, refreshToken, isAuthenticated: true });
-      },
-
-      setLoading: (isLoading) => {
-        set({ isLoading });
-      },
-
-      setHasHydrated: (hasHydrated) => {
-        set({ hasHydrated });
-      },
-
-      restoreSessionFromSecureStorage: async () => {
-        const [accessToken, refreshToken] = await Promise.all([
-          getStoredAccessToken(),
-          getStoredRefreshToken(),
-        ]);
-
-        if (accessToken && refreshToken) {
-          set({
-            accessToken,
-            refreshToken,
-            isAuthenticated: true,
-          });
+    (set, get) => {
+      const syncOnboardingProfile = () => {
+        const state = get();
+        if (!state.user?.id) {
           return;
         }
 
         set({
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
+          onboardingProfilesByUserId: {
+            ...state.onboardingProfilesByUserId,
+            [state.user.id]: snapshotOnboarding(state),
+          },
         });
-      },
+      };
 
-      setAccountType: (accountType) => {
-        set({ accountType });
-      },
+      return {
+        ...initialState,
 
-      completeOnboarding: () => {
-        set({ onboardingComplete: true });
-      },
+        login: async (user, accessToken, refreshToken) => {
+          await saveStoredTokens(accessToken, refreshToken);
+          const profile = get().onboardingProfilesByUserId[user.id];
+          set({
+            user,
+            accessToken,
+            refreshToken,
+            isAuthenticated: true,
+            ...applyOnboardingProfile(profile),
+          });
+        },
 
-      setVerificationStatus: (status) => {
-        set({ verificationStatus: status });
-      },
+        logout: async (options) => {
+          const state = get();
+          let profiles = state.onboardingProfilesByUserId;
 
-      setDeliveryProviderProfile: (profile) => {
-        set({ deliveryProviderProfile: profile });
-      },
+          if (!options?.wipeOnboarding && state.user?.id) {
+            profiles = {
+              ...profiles,
+              [state.user.id]: snapshotOnboarding(state),
+            };
+          }
 
-      submitDeliveryProviderSetup: (profile) => {
-        set({
-          deliveryProviderProfile: profile,
-          deliveryProviderStatus: 'pending_company_confirmation',
-        });
-      },
+          await clearStoredTokens();
+          set({
+            ...initialState,
+            hasHydrated: true,
+            onboardingProfilesByUserId: options?.wipeOnboarding ? {} : profiles,
+          });
+        },
 
-      approveDeliveryProvider: () => {
-        set({
-          deliveryProviderStatus: 'approved',
-          onboardingComplete: true,
-        });
-      },
-    }),
+        updateUser: (partialUser) => {
+          const current = get().user;
+          if (current) {
+            set({ user: { ...current, ...partialUser } });
+          }
+        },
+
+        setTokens: async (accessToken, refreshToken) => {
+          await saveStoredTokens(accessToken, refreshToken);
+          set({ accessToken, refreshToken, isAuthenticated: true });
+        },
+
+        setLoading: (isLoading) => {
+          set({ isLoading });
+        },
+
+        setHasHydrated: (hasHydrated) => {
+          set({ hasHydrated });
+        },
+
+        restoreSessionFromSecureStorage: async () => {
+          const [accessToken, refreshToken] = await Promise.all([
+            getStoredAccessToken(),
+            getStoredRefreshToken(),
+          ]);
+
+          if (accessToken && refreshToken) {
+            const { user, onboardingProfilesByUserId } = get();
+            const profile = user?.id ? onboardingProfilesByUserId[user.id] : undefined;
+
+            set({
+              accessToken,
+              refreshToken,
+              isAuthenticated: true,
+              ...(profile ? applyOnboardingProfile(profile) : {}),
+            });
+            return;
+          }
+
+          set({
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+          });
+        },
+
+        setAccountType: (accountType) => {
+          set({ accountType });
+          syncOnboardingProfile();
+        },
+
+        completeOnboarding: () => {
+          set({ onboardingComplete: true });
+          syncOnboardingProfile();
+        },
+
+        setVerificationStatus: (status) => {
+          set({ verificationStatus: status });
+          syncOnboardingProfile();
+        },
+
+        setDeliveryProviderProfile: (profile) => {
+          set({ deliveryProviderProfile: profile });
+          syncOnboardingProfile();
+        },
+
+        submitDeliveryProviderSetup: (profile) => {
+          set({
+            deliveryProviderProfile: profile,
+            deliveryProviderStatus: 'pending_company_confirmation',
+          });
+          syncOnboardingProfile();
+        },
+
+        approveDeliveryProvider: () => {
+          set({
+            deliveryProviderStatus: 'approved',
+            onboardingComplete: true,
+          });
+          syncOnboardingProfile();
+        },
+      };
+    },
     {
       name: 'civicbuild-auth-storage',
       storage: createJSONStorage(() => AsyncStorage),
@@ -160,6 +252,7 @@ export const useAuthStore = create<AuthStore>()(
         verificationStatus: state.verificationStatus,
         deliveryProviderProfile: state.deliveryProviderProfile,
         deliveryProviderStatus: state.deliveryProviderStatus,
+        onboardingProfilesByUserId: state.onboardingProfilesByUserId,
       }),
       onRehydrateStorage: () => () => {
         void (async () => {

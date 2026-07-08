@@ -2,13 +2,16 @@ import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { MARKETPLACE_LOCATION } from '@constants/marketplaceData';
 import theme from '@theme/index';
 
 import CartIconButton from './CartIconButton';
+import UserAvatarBadge from './UserAvatarBadge';
 
 interface DashboardHeaderProps {
   cartItemCount?: number;
+  userInitials: string;
+  userAvatarUri?: string | null;
+  onAvatarPress?: () => void;
   onCartPress?: () => void;
   onNotificationsPress?: () => void;
   onSettingsPress?: () => void;
@@ -16,16 +19,16 @@ interface DashboardHeaderProps {
 
 export default function DashboardHeader({
   cartItemCount = 0,
+  userInitials,
+  userAvatarUri,
+  onAvatarPress,
   onCartPress,
   onNotificationsPress,
   onSettingsPress,
 }: DashboardHeaderProps) {
   return (
     <View style={styles.container}>
-      <View style={styles.locationRow}>
-        <MaterialIcons name="location-on" size={20} color={theme.colors.primary} />
-        <Text style={styles.location}>{MARKETPLACE_LOCATION}</Text>
-      </View>
+      <UserAvatarBadge initials={userInitials} imageUri={userAvatarUri} onPress={onAvatarPress} />
       <Text style={styles.brand}>CivicBuild</Text>
       <View style={styles.actions}>
         <CartIconButton itemCount={cartItemCount} onPress={onCartPress} />
@@ -65,20 +68,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.outlineVariant,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    flex: 1,
-  },
-  location: {
-    fontFamily: theme.typography.fontFamily.label,
-    fontSize: theme.typography.fontSize.labelMd,
-    lineHeight: theme.typography.lineHeight.labelMd,
-    letterSpacing: theme.typography.letterSpacing.labelMd,
-    color: theme.colors.onSurfaceVariant,
-    textTransform: 'uppercase',
   },
   brand: {
     fontFamily: theme.typography.fontFamily.headline,

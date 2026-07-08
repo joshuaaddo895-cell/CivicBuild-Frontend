@@ -11,3 +11,15 @@ export function normalizeGhanaPhone(phone: string): string {
   }
   return normalized;
 }
+
+/** Formats a valid Ghana phone for backend delivery (e.g. +233201234567). */
+export function formatGhanaPhoneInternational(phone: string): string {
+  const normalized = phone.replace(/[\s-]/g, '');
+  if (normalized.startsWith('+233')) {
+    return normalized;
+  }
+  if (normalized.startsWith('0')) {
+    return `+233${normalized.slice(1)}`;
+  }
+  return normalized;
+}

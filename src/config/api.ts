@@ -34,14 +34,14 @@ function getDevPlatformOverride(): string | null {
 }
 
 export function getApiBaseUrl(): string {
-  const platformOverride = getDevPlatformOverride();
-  if (platformOverride) {
-    return platformOverride;
-  }
-
   const configuredUrl = getConfiguredApiUrl();
   if (configuredUrl) {
     return configuredUrl;
+  }
+
+  const platformOverride = getDevPlatformOverride();
+  if (platformOverride) {
+    return platformOverride;
   }
 
   throw new Error(

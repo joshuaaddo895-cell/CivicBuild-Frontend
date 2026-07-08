@@ -6,7 +6,7 @@ import type { MainTabParamList } from '@appTypes/navigation';
 import HomeStackNavigator from '@navigation/HomeStackNavigator';
 import MainTabBarButton, { getMainTabIcon } from '@navigation/MainTabBarButton';
 import MessagesStackNavigator from '@navigation/MessagesStackNavigator';
-import ProfileScreen from '@screens/main/ProfileScreen';
+import ProfileStackNavigator from '@navigation/ProfileStackNavigator';
 import SavedScreen from '@screens/main/SavedScreen';
 import theme from '@theme/index';
 
@@ -53,7 +53,7 @@ export default function MainNavigator() {
         component={MessagesStackNavigator}
         options={{ title: 'Messages' }}
       />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
   );
 }

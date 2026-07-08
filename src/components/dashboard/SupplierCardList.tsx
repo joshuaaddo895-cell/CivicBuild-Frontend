@@ -10,12 +10,14 @@ interface SupplierCardListProps {
   suppliers: Supplier[];
   isFavorite?: (supplierId: string) => boolean;
   onFavoritePress?: (supplierId: string) => void;
+  onSupplierPress?: (supplierId: string) => void;
 }
 
 export default function SupplierCardList({
   suppliers,
   isFavorite,
   onFavoritePress,
+  onSupplierPress,
 }: SupplierCardListProps) {
   return (
     <View style={styles.wrapper}>
@@ -30,6 +32,7 @@ export default function SupplierCardList({
             supplier={supplier}
             isFavorite={isFavorite?.(supplier.id) ?? false}
             onFavoritePress={onFavoritePress ? () => onFavoritePress(supplier.id) : undefined}
+            onPress={onSupplierPress ? () => onSupplierPress(supplier.id) : undefined}
           />
         ))}
       </ScrollView>
