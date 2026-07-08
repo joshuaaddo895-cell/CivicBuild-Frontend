@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   webLoading: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.background,

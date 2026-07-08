@@ -161,7 +161,7 @@ search lives on Home dashboard only)
 
 **Frontend**
 
-- React Native + Expo SDK 57
+- React Native + Expo SDK 54
 - React Navigation (native stack + bottom tabs + nested stacks for Home/Settings and Messages)
 - Zustand (auth, saved favorites)
 - expo-image, expo-image-picker, expo-document-picker
