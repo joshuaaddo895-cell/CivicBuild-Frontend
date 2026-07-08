@@ -66,11 +66,15 @@
     "nativewind": {
       "react": "19.1.0",
       "react-native": "0.81.5"
+    },
+    "react-native-css-interop": {
+      "react": "19.1.0",
+      "react-native": "0.81.5"
     }
   },
   "scripts": {
-    "start": "expo start --port 8080",
-    "start:tunnel": "expo start --tunnel --port 8080",
+    "start": "expo start --port 8080 --clear",
+    "start:tunnel": "expo start --tunnel --port 8080 --clear",
     "android": "expo start --android --port 8080",
     "ios": "expo start --ios --port 8080",
     "web": "expo start --web --port 8080",
