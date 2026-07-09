@@ -53,23 +53,45 @@ export type HomeStackParamList = {
     subjectName: string;
   };
   AllSuppliers: undefined;
+  SupplierDetail: { supplierId: string };
+  AgencyDetail: { agencyId: string };
+};
+
+// ─── Agency Stack ─────────────────────────────────────────────────────────────
+export type AgencyStackParamList = {
+  AgencyDashboard: undefined;
+  AgencyProducts: undefined;
+  AgencyProductForm: { productId?: string };
+  AgencyOrders: undefined;
+  AgencyOrderDetail: { orderId: string };
+  AgencyPosts: undefined;
+  AgencyPostForm: { postId?: string };
+  AgencyPersonnel: undefined;
+  Notifications: undefined;
+  Settings: undefined;
+  ChangePassword: undefined;
 };
 
 // ─── Messages Stack ─────────────────────────────────────────────────────────────
 export type MessagesStackParamList = {
   MessagesList: undefined;
-  ConversationDetail: { threadId: string };
+  ConversationDetail: {
+    threadId: string;
+    participantName?: string;
+    participantLogoUri?: string;
+  };
 };
 
 // ─── Main Tab Stack ───────────────────────────────────────────────────────────
 export type ProfileStackParamList = {
   ProfileMain: undefined;
   EditProfile: undefined;
+  MyReviews: undefined;
   HelpSupport: undefined;
 };
 
 export type MainTabParamList = {
-  Home: NavigatorScreenParams<HomeStackParamList>;
+  Home: NavigatorScreenParams<HomeStackParamList> | NavigatorScreenParams<AgencyStackParamList>;
   Saved: undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList>;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
@@ -188,6 +210,94 @@ export type AllSuppliersScreenProps = CompositeScreenProps<
   >
 >;
 
+export type SupplierDetailScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<HomeStackParamList, 'SupplierDetail'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyDetailScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<HomeStackParamList, 'AgencyDetail'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyDashboardScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyDashboard'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyProductsScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyProducts'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyProductFormScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyProductForm'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyOrdersScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyOrders'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyOrderDetailScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyOrderDetail'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyPostsScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyPosts'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyPostFormScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyPostForm'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyPersonnelScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyPersonnel'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type NotificationsScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'Notifications'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
 export type SavedScreenProps = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Saved'>,
   NativeStackScreenProps<RootStackParamList>
@@ -227,6 +337,14 @@ export type HelpSupportScreenProps = CompositeScreenProps<
 
 export type EditProfileScreenProps = CompositeScreenProps<
   NativeStackScreenProps<ProfileStackParamList, 'EditProfile'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Profile'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type MyReviewsScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<ProfileStackParamList, 'MyReviews'>,
   CompositeScreenProps<
     BottomTabScreenProps<MainTabParamList, 'Profile'>,
     NativeStackScreenProps<RootStackParamList>

@@ -41,6 +41,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     try {
       await new Promise((resolve) => setTimeout(resolve, 800));
       useAuthStore.getState().setVerificationStatus('pending');
+      useAuthStore.getState().setManagedAgencyId('buildstrong-ltd');
       completeOnboarding();
     } catch {
       setSubmitError('Unable to submit verification. Please try again.');

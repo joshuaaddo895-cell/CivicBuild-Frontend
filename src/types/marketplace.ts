@@ -33,6 +33,8 @@ export interface Product {
   inStock?: boolean;
   in_stock?: boolean; // Support both snake_case and camelCase
   supplierId?: string;
+  agencyId?: string;
+  stockQuantity?: number;
   highlight?: string;
   description?: string;
   brand?: string;

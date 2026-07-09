@@ -1,7 +1,7 @@
 import type { AccountType, VerificationStatus } from '@appTypes/onboarding';
 import type { SavedItem, SavedItemDetail } from '@appTypes/saved';
 import { VERIFIED_CONSTRUCTION_AGENCIES } from '@constants/constructionAgencies';
-import { POPULAR_PRODUCTS, TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
+import { getPopularProducts, TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
 import { formatPriceWithUnit } from '@utils/paystackAmount';
 
 export function getAccountTypeLabel(accountType: AccountType | null): string {
@@ -44,7 +44,7 @@ export function getVerificationStatusColor(status: VerificationStatus | null): s
 
 export function resolveSavedItemDetail(item: SavedItem): SavedItemDetail | null {
   if (item.type === 'product') {
-    const product = POPULAR_PRODUCTS.find((entry) => entry.id === item.id);
+    const product = getPopularProducts().find((entry) => entry.id === item.id);
     if (!product) {
       return null;
     }

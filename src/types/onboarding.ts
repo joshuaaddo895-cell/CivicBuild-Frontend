@@ -6,7 +6,8 @@ export type OnboardingStep = 'complete' | 'verification' | 'delivery_setup';
 
 export type VerificationStatus = 'pending' | 'verified' | 'rejected';
 
-export type DeliveryProviderStatus = 'none' | 'pending_company_confirmation' | 'approved';
+export type DeliveryProviderStatus =
+  'none' | 'pending_company_confirmation' | 'approved' | 'rejected';
 
 export interface RoleOption {
   id: AccountType;
@@ -19,4 +20,5 @@ export interface DeliveryProviderProfile {
   profileImageUri: string | null;
   fullName: string;
   constructionAgencyId: string | null;
+  vehicleInfo?: string;
 }

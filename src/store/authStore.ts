@@ -9,6 +9,7 @@ import type {
   DeliveryProviderStatus,
   VerificationStatus,
 } from '@appTypes/onboarding';
+import { useDeliveryPersonnelStore } from '@store/deliveryPersonnelStore';
 import {
   clearStoredTokens,
   getStoredAccessToken,
@@ -22,6 +23,7 @@ interface OnboardingProfile {
   verificationStatus: VerificationStatus | null;
   deliveryProviderProfile: DeliveryProviderProfile | null;
   deliveryProviderStatus: DeliveryProviderStatus;
+  managedAgencyId: string | null;
 }
 
 interface AuthState {
@@ -36,6 +38,7 @@ interface AuthState {
   verificationStatus: VerificationStatus | null;
   deliveryProviderProfile: DeliveryProviderProfile | null;
   deliveryProviderStatus: DeliveryProviderStatus;
+  managedAgencyId: string | null;
   onboardingProfilesByUserId: Record<string, OnboardingProfile>;
 }
 
@@ -53,6 +56,9 @@ interface AuthActions {
   setDeliveryProviderProfile: (profile: DeliveryProviderProfile) => void;
   submitDeliveryProviderSetup: (profile: DeliveryProviderProfile) => void;
   approveDeliveryProvider: () => void;
+  rejectDeliveryProvider: () => void;
+  setManagedAgencyId: (agencyId: string) => void;
+  syncDeliveryProviderApproval: () => void;
 }
 
 type AuthStore = AuthState & AuthActions;
@@ -64,12 +70,14 @@ const emptyOnboardingState: Pick<
   | 'verificationStatus'
   | 'deliveryProviderProfile'
   | 'deliveryProviderStatus'
+  | 'managedAgencyId'
 > = {
   accountType: null,
   onboardingComplete: false,
   verificationStatus: null,
   deliveryProviderProfile: null,
   deliveryProviderStatus: 'none',
+  managedAgencyId: null,
 };
 
 const initialState: AuthState = {
@@ -90,6 +98,7 @@ function snapshotOnboarding(state: AuthState): OnboardingProfile {
     verificationStatus: state.verificationStatus,
     deliveryProviderProfile: state.deliveryProviderProfile,
     deliveryProviderStatus: state.deliveryProviderStatus,
+    managedAgencyId: state.managedAgencyId,
   };
 }
 
@@ -104,6 +113,7 @@ function applyOnboardingProfile(profile: OnboardingProfile | undefined) {
     verificationStatus: profile.verificationStatus,
     deliveryProviderProfile: profile.deliveryProviderProfile,
     deliveryProviderStatus: profile.deliveryProviderStatus,
+    managedAgencyId: profile.managedAgencyId,
   };
 }
 
@@ -225,6 +235,9 @@ export const useAuthStore = create<AuthStore>()(
         },
 
         submitDeliveryProviderSetup: (profile) => {
+          const userId = get().user?.id ?? null;
+          useDeliveryPersonnelStore.getState().submitAssociationRequest(profile, userId);
+
           set({
             deliveryProviderProfile: profile,
             deliveryProviderStatus: 'pending_company_confirmation',
@@ -239,6 +252,39 @@ export const useAuthStore = create<AuthStore>()(
           });
           syncOnboardingProfile();
         },
+
+        rejectDeliveryProvider: () => {
+          set({
+            deliveryProviderStatus: 'rejected',
+          });
+          syncOnboardingProfile();
+        },
+
+        setManagedAgencyId: (agencyId) => {
+          set({ managedAgencyId: agencyId });
+          syncOnboardingProfile();
+        },
+
+        syncDeliveryProviderApproval: () => {
+          const { user, accountType, deliveryProviderStatus } = get();
+          if (accountType !== 'delivery' || !user?.id) {
+            return;
+          }
+
+          const remoteStatus = useDeliveryPersonnelStore.getState().getStatusForUser(user.id);
+          if (!remoteStatus) {
+            return;
+          }
+
+          if (remoteStatus === 'approved' && deliveryProviderStatus !== 'approved') {
+            get().approveDeliveryProvider();
+            return;
+          }
+
+          if (remoteStatus === 'rejected' && deliveryProviderStatus !== 'rejected') {
+            get().rejectDeliveryProvider();
+          }
+        },
       };
     },
     {
@@ -252,13 +298,14 @@ export const useAuthStore = create<AuthStore>()(
         verificationStatus: state.verificationStatus,
         deliveryProviderProfile: state.deliveryProviderProfile,
         deliveryProviderStatus: state.deliveryProviderStatus,
+        managedAgencyId: state.managedAgencyId,
         onboardingProfilesByUserId: state.onboardingProfilesByUserId,
       }),
       onRehydrateStorage: () => () => {
-        void (async () => {
+        (async () => {
           await useAuthStore.getState().restoreSessionFromSecureStorage();
           useAuthStore.getState().setHasHydrated(true);
-        })();
+        })().catch(() => undefined);
       },
     },
   ),

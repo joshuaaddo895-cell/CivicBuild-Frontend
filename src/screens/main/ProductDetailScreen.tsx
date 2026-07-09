@@ -17,6 +17,7 @@ import { enrichProduct, usesNumericQuantityInput } from '@utils/productEnrichmen
 import {
   findMessageThreadIdForSupplier,
   findProductById,
+  resolveMessageNavigationForSupplier,
   resolveSupplierForProduct,
 } from '@utils/productHelpers';
 
@@ -152,17 +153,26 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
   }, [product]);
 
   const handleMessageSupplier = useCallback(() => {
-    const supplierName = product?.supplierName ?? product?.supplier_name;
-    if (!supplierName) {
+    if (!product) {
       navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
       return;
     }
 
-    const threadId = findMessageThreadIdForSupplier(supplierName);
-    if (threadId) {
+    const supplier = resolveSupplierForProduct(product);
+    if (supplier) {
       navigation.getParent()?.navigate('Messages', {
         screen: 'ConversationDetail',
-        params: { threadId },
+        params: resolveMessageNavigationForSupplier(supplier),
+      });
+      return;
+    }
+
+    const supplierName = product.supplierName ?? product.supplier_name;
+    const threadId = supplierName ? findMessageThreadIdForSupplier(supplierName) : undefined;
+    if (threadId && supplierName) {
+      navigation.getParent()?.navigate('Messages', {
+        screen: 'ConversationDetail',
+        params: { threadId, participantName: supplierName },
       });
       return;
     }

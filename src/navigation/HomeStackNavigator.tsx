@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 
 import type { HomeStackParamList } from '@appTypes/navigation';
+import AgencyDetailScreen from '@screens/main/AgencyDetailScreen';
 import AllSuppliersScreen from '@screens/main/AllSuppliersScreen';
 import CartScreen from '@screens/main/CartScreen';
 import ChangePasswordScreen from '@screens/main/ChangePasswordScreen';
@@ -12,6 +13,7 @@ import PaymentWebViewScreen from '@screens/main/PaymentWebViewScreen';
 import ProductDetailScreen from '@screens/main/ProductDetailScreen';
 import ReviewsScreen from '@screens/main/ReviewsScreen';
 import SettingsScreen from '@screens/main/SettingsScreen';
+import SupplierDetailScreen from '@screens/main/SupplierDetailScreen';
 import theme from '@theme/index';
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
@@ -29,6 +31,8 @@ export default function HomeStackNavigator() {
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
       <Stack.Screen name="Reviews" component={ReviewsScreen} />
       <Stack.Screen name="AllSuppliers" component={AllSuppliersScreen} />
+      <Stack.Screen name="SupplierDetail" component={SupplierDetailScreen} />
+      <Stack.Screen name="AgencyDetail" component={AgencyDetailScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />

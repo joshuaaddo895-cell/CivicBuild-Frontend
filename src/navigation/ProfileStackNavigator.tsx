@@ -4,6 +4,7 @@ import React from 'react';
 import type { ProfileStackParamList } from '@appTypes/navigation';
 import EditProfileScreen from '@screens/main/EditProfileScreen';
 import HelpSupportScreen from '@screens/main/HelpSupportScreen';
+import MyReviewsScreen from '@screens/main/MyReviewsScreen';
 import ProfileScreen from '@screens/main/ProfileScreen';
 import theme from '@theme/index';
 
@@ -20,6 +21,7 @@ export default function ProfileStackNavigator() {
     >
       <Stack.Screen name="ProfileMain" component={ProfileScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="MyReviews" component={MyReviewsScreen} />
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
     </Stack.Navigator>
   );

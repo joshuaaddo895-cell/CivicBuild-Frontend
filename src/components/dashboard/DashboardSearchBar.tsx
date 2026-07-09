@@ -7,9 +7,14 @@ import theme from '@theme/index';
 interface DashboardSearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
+  placeholder?: string;
 }
 
-export default function DashboardSearchBar({ value, onChangeText }: DashboardSearchBarProps) {
+export default function DashboardSearchBar({
+  value,
+  onChangeText,
+  placeholder = 'Search for cement, blocks, gravel...',
+}: DashboardSearchBarProps) {
   return (
     <View style={styles.container}>
       <MaterialIcons
@@ -20,7 +25,7 @@ export default function DashboardSearchBar({ value, onChangeText }: DashboardSea
       />
       <TextInput
         style={styles.input}
-        placeholder="Search for cement, blocks, gravel..."
+        placeholder={placeholder}
         placeholderTextColor={theme.colors.outline}
         value={value}
         onChangeText={onChangeText}

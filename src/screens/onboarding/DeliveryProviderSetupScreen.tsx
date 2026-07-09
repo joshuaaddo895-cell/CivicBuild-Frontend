@@ -40,6 +40,7 @@ export default function DeliveryProviderSetupScreen({
         profileImageUri,
         fullName: fullName.trim() || defaultFullName,
         constructionAgencyId,
+        vehicleInfo: 'Delivery vehicle · Greater Accra',
       });
       navigation.navigate('PendingCompanyConfirmation');
     } catch {

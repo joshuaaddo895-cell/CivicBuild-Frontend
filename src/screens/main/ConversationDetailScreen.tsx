@@ -1,4 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
@@ -25,8 +26,10 @@ export default function ConversationDetailScreen({
   navigation,
   route,
 }: ConversationDetailScreenProps) {
-  const { threadId } = route.params;
+  const { threadId, participantName, participantLogoUri } = route.params;
   const thread = findMessageThread(threadId);
+  const displayName = thread?.participantName ?? participantName ?? 'Conversation';
+  const displayLogoUri = thread?.participantLogoUri ?? participantLogoUri;
   const initialMessages = CHAT_MESSAGES_BY_THREAD[threadId] ?? [];
 
   const [messages, setMessages] = useState<ChatMessage[]>(
@@ -70,9 +73,18 @@ export default function ConversationDetailScreen({
           <MaterialIcons name="arrow-back" size={24} color={theme.colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
-          {thread?.participantName ?? 'Conversation'}
+          {displayName}
         </Text>
-        <View style={styles.headerSpacer} />
+        {displayLogoUri ? (
+          <Image
+            source={{ uri: displayLogoUri }}
+            style={styles.headerAvatar}
+            contentFit="cover"
+            accessibilityLabel={`${displayName} logo`}
+          />
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <FlatList
@@ -167,6 +179,12 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 32,
+  },
+  headerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.surfaceContainer,
   },
   messagesContent: {
     paddingHorizontal: theme.spacing.marginMobile,

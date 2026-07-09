@@ -1,4 +1,5 @@
 import type { Product } from '@appTypes/marketplace';
+import { VERIFIED_CONSTRUCTION_AGENCIES } from '@constants/constructionAgencies';
 import { TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
 import { formatUnitSuffix } from '@utils/paystackAmount';
 
@@ -131,6 +132,22 @@ function buildDescription(product: Product, brand?: string): string {
   return `${brandText}${product.name} is a trusted ${product.category} product supplied for Ghanaian construction projects. It is commonly used by contractors and homeowners for reliable results on site. Sold ${product.unit ?? `per ${unitSuffix}`}, this listing is curated for the CivicBuild marketplace and ready for pickup or delivery coordination with the supplier.`;
 }
 
+function resolveAgencyId(supplierName?: string): string | undefined {
+  if (!supplierName) {
+    return undefined;
+  }
+
+  const normalized = supplierName.trim().toLowerCase();
+  const match = VERIFIED_CONSTRUCTION_AGENCIES.find(
+    (agency) =>
+      agency.name.toLowerCase() === normalized ||
+      normalized.includes(agency.name.toLowerCase()) ||
+      agency.name.toLowerCase().includes(normalized),
+  );
+
+  return match?.id;
+}
+
 function resolveSupplierId(supplierName?: string): string | undefined {
   if (!supplierName) {
     return undefined;
@@ -162,6 +179,7 @@ export function enrichProduct(product: Product): Product {
     description: buildDescription(product, brand),
     deliveryEstimate: inStock ? '2-3 days' : '5-7 days',
     supplierId: resolveSupplierId(supplierName),
+    agencyId: product.agencyId ?? resolveAgencyId(supplierName),
     inStock,
   };
 }

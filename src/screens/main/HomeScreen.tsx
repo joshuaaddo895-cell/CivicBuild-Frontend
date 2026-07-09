@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -18,14 +18,15 @@ import {
   SectionHeader,
   SupplierCardList,
 } from '@components/dashboard';
+import { isConstructionAgencyId } from '@constants/agencyProfiles';
 import {
   DASHBOARD_SUPPLIERS,
   filterProductsByCategory,
   MARKETPLACE_CATEGORIES,
-  POPULAR_PRODUCTS,
 } from '@constants/marketplaceData';
 import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
+import { useProductStore } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 import { getUserInitials } from '@utils/userInitials';
@@ -51,8 +52,23 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
     navigation.getParent()?.navigate('Profile', { screen: 'ProfileMain' });
   };
 
+  const extraProducts = useProductStore((state) => state.extraProducts);
+  const removedProductIds = useProductStore((state) => state.removedProductIds);
+  const productOverrides = useProductStore((state) => state.productOverrides);
+  const initializeProducts = useProductStore((state) => state.initialize);
+  const getAllProducts = useProductStore((state) => state.getAllProducts);
+
+  const marketplaceProducts = useMemo(
+    () => getAllProducts(),
+    [extraProducts, getAllProducts, productOverrides, removedProductIds],
+  );
+
+  useEffect(() => {
+    initializeProducts();
+  }, [initializeProducts]);
+
   const filteredProducts = useMemo(() => {
-    const byCategory = filterProductsByCategory(POPULAR_PRODUCTS, selectedCategoryId);
+    const byCategory = filterProductsByCategory(marketplaceProducts, selectedCategoryId);
     const query = searchQuery.trim().toLowerCase();
 
     if (!query) {
@@ -65,10 +81,19 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
         product.category.toLowerCase().includes(query) ||
         (product.supplierName && product.supplierName.toLowerCase().includes(query)),
     );
-  }, [searchQuery, selectedCategoryId]);
+  }, [marketplaceProducts, searchQuery, selectedCategoryId]);
+
+  const handleSupplierPress = (supplierId: string) => {
+    if (isConstructionAgencyId(supplierId)) {
+      navigation.navigate('AgencyDetail', { agencyId: supplierId });
+      return;
+    }
+
+    navigation.navigate('SupplierDetail', { supplierId });
+  };
 
   const handleAddProduct = (productId: string) => {
-    const product = POPULAR_PRODUCTS.find((entry) => entry.id === productId);
+    const product = marketplaceProducts.find((entry) => entry.id === productId);
     if (product) {
       addProduct(product);
     }
@@ -114,6 +139,7 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
             suppliers={DASHBOARD_SUPPLIERS}
             isFavorite={(id) => isSaved(id, 'supplier')}
             onFavoritePress={(id) => toggleSaved(id, 'supplier')}
+            onSupplierPress={handleSupplierPress}
           />
         </View>
 

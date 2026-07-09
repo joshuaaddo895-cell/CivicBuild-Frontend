@@ -1,5 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { Image } from 'expo-image';
+import React, { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,17 +15,21 @@ export default function PendingCompanyConfirmationScreen({
   navigation,
 }: PendingCompanyConfirmationScreenProps) {
   const deliveryProviderProfile = useAuthStore((state) => state.deliveryProviderProfile);
-  const approveDeliveryProvider = useAuthStore((state) => state.approveDeliveryProvider);
+  const deliveryProviderStatus = useAuthStore((state) => state.deliveryProviderStatus);
+  const syncDeliveryProviderApproval = useAuthStore((state) => state.syncDeliveryProviderApproval);
   const logout = useAuthStore((state) => state.logout);
 
   const agency = findConstructionAgencyById(deliveryProviderProfile?.constructionAgencyId ?? null);
+  const isRejected = deliveryProviderStatus === 'rejected';
 
-  const handleDemoApproval = () => {
-    approveDeliveryProvider();
-  };
+  useFocusEffect(
+    useCallback(() => {
+      syncDeliveryProviderApproval();
+    }, [syncDeliveryProviderApproval]),
+  );
 
   const handleBackToRoles = () => {
-    void logout();
+    logout().catch(() => undefined);
   };
 
   return (
@@ -31,24 +37,65 @@ export default function PendingCompanyConfirmationScreen({
       <AuthDecorBackground />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
-          <View style={styles.iconCircle}>
-            <MaterialIcons name="hourglass-top" size={40} color={theme.colors.tertiary} />
+          <View style={[styles.iconCircle, isRejected && styles.iconCircleRejected]}>
+            <MaterialIcons
+              name={isRejected ? 'cancel' : 'hourglass-top'}
+              size={40}
+              color={isRejected ? theme.colors.error : theme.colors.tertiary}
+            />
           </View>
 
           <Text style={styles.title} accessibilityRole="header">
-            Pending Company Confirmation
+            {isRejected ? 'Association Declined' : 'Waiting for Approval'}
           </Text>
           <Text style={styles.subtitle}>
-            Your request to join{' '}
-            <Text style={styles.agencyName}>{agency?.name ?? 'the selected company'}</Text> as a
-            delivery provider is awaiting approval from their team.
+            {isRejected ? (
+              <>
+                <Text style={styles.agencyName}>{agency?.name ?? 'The selected company'}</Text>{' '}
+                declined your delivery provider association. You can edit your profile and submit
+                again.
+              </>
+            ) : (
+              <>
+                <Text style={styles.agencyName}>{agency?.name ?? 'The selected company'}</Text>{' '}
+                needs to approve your association before you can start receiving deliveries.
+                We&apos;ll notify you once approved.
+              </>
+            )}
           </Text>
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Your submitted details</Text>
+
+            {deliveryProviderProfile?.profileImageUri ? (
+              <Image
+                source={{ uri: deliveryProviderProfile.profileImageUri }}
+                style={styles.profileImage}
+                contentFit="cover"
+                accessibilityLabel="Your profile photo"
+              />
+            ) : (
+              <View style={styles.profileFallback}>
+                <MaterialIcons name="person" size={32} color={theme.colors.onSurfaceVariant} />
+              </View>
+            )}
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Full name</Text>
+              <Text style={styles.summaryValue}>{deliveryProviderProfile?.fullName ?? '—'}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Construction company</Text>
+              <Text style={styles.summaryValue}>{agency?.name ?? '—'}</Text>
+            </View>
+          </View>
 
           <View style={styles.infoCard}>
             <MaterialIcons name="info-outline" size={20} color={theme.colors.primary} />
             <Text style={styles.infoText}>
-              You will receive a notification once the construction agency confirms your
-              association. Until then, marketplace access remains limited.
+              {isRejected
+                ? 'Update your profile and resubmit if you selected the wrong company or need to try again.'
+                : 'This screen is a blocking gate — you will not reach the delivery dashboard until your agency approves your request via Notifications.'}
             </Text>
           </View>
 
@@ -62,15 +109,6 @@ export default function PendingCompanyConfirmationScreen({
             accessibilityLabel="Edit delivery provider profile"
           >
             <Text style={styles.secondaryButtonText}>Edit Profile</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleDemoApproval}
-            style={({ pressed }) => [styles.demoButton, pressed && styles.demoButtonPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Simulate company approval for demo"
-          >
-            <Text style={styles.demoButtonText}>Simulate Company Approval (Demo)</Text>
           </Pressable>
 
           <Pressable
@@ -113,6 +151,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconCircleRejected: {
+    backgroundColor: theme.colors.errorContainer,
+  },
   title: {
     fontFamily: theme.typography.fontFamily.headline,
     fontSize: theme.typography.fontSize.headlineMd,
@@ -129,6 +170,52 @@ const styles = StyleSheet.create({
   },
   agencyName: {
     fontFamily: theme.typography.fontFamily.bodySemi,
+    color: theme.colors.onSurface,
+    fontWeight: '600',
+  },
+  summaryCard: {
+    width: '100%',
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.outlineVariant,
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  summaryTitle: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onSurfaceVariant,
+    textTransform: 'uppercase',
+    alignSelf: 'flex-start',
+  },
+  profileImage: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+  },
+  profileFallback: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: theme.colors.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryRow: {
+    width: '100%',
+    gap: 2,
+  },
+  summaryLabel: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onSurfaceVariant,
+    textTransform: 'uppercase',
+  },
+  summaryValue: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.onSurface,
     fontWeight: '600',
   },
@@ -168,24 +255,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.primary,
     fontWeight: '600',
-  },
-  demoButton: {
-    width: '100%',
-    minHeight: 48,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.md,
-  },
-  demoButtonPressed: {
-    opacity: 0.85,
-  },
-  demoButtonText: {
-    fontFamily: theme.typography.fontFamily.label,
-    fontSize: theme.typography.fontSize.labelMd,
-    color: theme.colors.onSurfaceVariant,
-    textTransform: 'uppercase',
   },
   linkButton: {
     paddingVertical: theme.spacing.sm,

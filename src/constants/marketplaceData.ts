@@ -1,7 +1,6 @@
 import type { MarketplaceCategory, Product, Supplier } from '@appTypes/marketplace';
-import { enrichProduct } from '@utils/productEnrichment';
+import { getMarketplaceProducts } from '@store/productStore';
 
-import { MOCK_PRODUCTS } from './mockProducts';
 import { ALL_SUPPLIERS, DASHBOARD_SUPPLIER_LIMIT } from './mockSuppliers';
 
 export const MARKETPLACE_LOCATION = 'Accra, Ghana';
@@ -25,7 +24,13 @@ export const TRUSTED_SUPPLIERS: Supplier[] = ALL_SUPPLIERS;
 /** Subset shown in the dashboard horizontal carousel. */
 export const DASHBOARD_SUPPLIERS: Supplier[] = ALL_SUPPLIERS.slice(0, DASHBOARD_SUPPLIER_LIMIT);
 
-export const POPULAR_PRODUCTS: Product[] = MOCK_PRODUCTS.map(enrichProduct);
+/** Live marketplace catalog — merges seed data with agency CRUD from productStore. */
+export function getPopularProducts(): Product[] {
+  return getMarketplaceProducts();
+}
+
+/** @deprecated Use getPopularProducts() for the live catalog. */
+export const POPULAR_PRODUCTS: Product[] = getMarketplaceProducts();
 
 export function filterProductsByCategory(products: Product[], categoryId: string): Product[] {
   if (categoryId === 'all') {
@@ -44,4 +49,24 @@ export function filterProductsBySearch(products: Product[], query: string): Prod
       product.category.toLowerCase().includes(normalized) ||
       (product.supplierName && product.supplierName.toLowerCase().includes(normalized)),
   );
+}
+
+export function filterSuppliersBySearch(suppliers: Supplier[], query: string): Supplier[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return suppliers;
+  }
+
+  return suppliers.filter((supplier) => {
+    const categoryLabel =
+      MARKETPLACE_CATEGORIES.find(
+        (category) => category.id === supplier.categoryId,
+      )?.label.toLowerCase() ?? '';
+
+    return (
+      supplier.name.toLowerCase().includes(normalized) ||
+      supplier.categoryId.toLowerCase().includes(normalized) ||
+      categoryLabel.includes(normalized)
+    );
+  });
 }

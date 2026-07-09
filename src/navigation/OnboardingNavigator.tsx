@@ -22,6 +22,10 @@ function getInitialOnboardingRoute(): keyof OnboardingStackParamList {
     return 'PendingCompanyConfirmation';
   }
 
+  if (accountType === 'delivery' && deliveryProviderStatus === 'rejected') {
+    return 'PendingCompanyConfirmation';
+  }
+
   if (accountType === 'delivery') {
     return 'DeliveryProviderSetup';
   }

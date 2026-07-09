@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ProfileScreenProps } from '@appTypes/navigation';
 import UserAvatarBadge from '@components/dashboard/UserAvatarBadge';
 import { findConstructionAgencyById } from '@constants/constructionAgencies';
+import { getMyReviewsSummary, MOCK_USER_REVIEWS } from '@constants/mockMyReviews';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 import { formatUserDisplayName } from '@utils/mockAuth';
@@ -31,6 +32,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const associatedAgency = findConstructionAgencyById(
     deliveryProviderProfile?.constructionAgencyId ?? null,
   );
+  const myReviewsSummary = getMyReviewsSummary(MOCK_USER_REVIEWS);
 
   const menuItems = [
     {
@@ -38,7 +40,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       label: 'Edit Profile',
       onPress: () => navigation.navigate('EditProfile'),
     },
-    { icon: 'star-outline' as const, label: 'My Reviews / Ratings', onPress: () => {} },
+    {
+      icon: 'star-outline' as const,
+      label: 'My Reviews / Ratings',
+      subtitle: `${myReviewsSummary.totalCount} reviews · ${myReviewsSummary.averageRatingGiven.toFixed(1)} avg`,
+      onPress: () => navigation.navigate('MyReviews'),
+    },
     {
       icon: 'help-outline' as const,
       label: 'Help & Support',
@@ -127,7 +134,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               accessibilityLabel={item.label}
             >
               <MaterialIcons name={item.icon} size={22} color={theme.colors.onSurfaceVariant} />
-              <Text style={styles.menuItemLabel}>{item.label}</Text>
+              <View style={styles.menuItemTextBlock}>
+                <Text style={styles.menuItemLabel}>{item.label}</Text>
+                {'subtitle' in item && item.subtitle ? (
+                  <Text style={styles.menuItemSubtitle}>{item.subtitle}</Text>
+                ) : null}
+              </View>
               <MaterialIcons name="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />
             </Pressable>
           ))}
@@ -281,12 +293,20 @@ const styles = StyleSheet.create({
   menuItemPressed: {
     backgroundColor: theme.colors.surfaceContainerLow,
   },
-  menuItemLabel: {
+  menuItemTextBlock: {
     flex: 1,
+    gap: 2,
+  },
+  menuItemLabel: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.bodyMd,
     lineHeight: theme.typography.lineHeight.bodyMd,
     color: theme.colors.onSurface,
+  },
+  menuItemSubtitle: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.onSurfaceVariant,
   },
   logoutButton: {
     backgroundColor: theme.colors.surfaceContainerLowest,

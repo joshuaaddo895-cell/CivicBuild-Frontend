@@ -4,22 +4,31 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AllSuppliersScreenProps } from '@appTypes/navigation';
-import { CategoryChipList } from '@components/dashboard';
+import { DashboardSearchBar } from '@components/dashboard';
 import SupplierCard from '@components/dashboard/SupplierCard';
-import { MARKETPLACE_CATEGORIES } from '@constants/marketplaceData';
-import { ALL_SUPPLIERS, filterSuppliersByCategory } from '@constants/mockSuppliers';
+import { isConstructionAgencyId } from '@constants/agencyProfiles';
+import { filterSuppliersBySearch, TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 
 export default function AllSuppliersScreen({ navigation }: AllSuppliersScreenProps) {
-  const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
 
   const filteredSuppliers = useMemo(
-    () => filterSuppliersByCategory(ALL_SUPPLIERS, selectedCategoryId),
-    [selectedCategoryId],
+    () => filterSuppliersBySearch(TRUSTED_SUPPLIERS, searchQuery),
+    [searchQuery],
   );
+
+  const handleSupplierPress = (supplierId: string) => {
+    if (isConstructionAgencyId(supplierId)) {
+      navigation.navigate('AgencyDetail', { agencyId: supplierId });
+      return;
+    }
+
+    navigation.navigate('SupplierDetail', { supplierId });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -36,29 +45,44 @@ export default function AllSuppliersScreen({ navigation }: AllSuppliersScreenPro
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.subtitle}>
           {filteredSuppliers.length} trusted supplier{filteredSuppliers.length === 1 ? '' : 's'}{' '}
-          near Accra
+          {searchQuery.trim() ? 'found' : 'near Accra'}
         </Text>
 
-        <CategoryChipList
-          categories={MARKETPLACE_CATEGORIES}
-          selectedId={selectedCategoryId}
-          onSelect={setSelectedCategoryId}
+        <DashboardSearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search suppliers by name or category..."
         />
 
-        <View style={styles.list}>
-          {filteredSuppliers.map((supplier) => (
-            <SupplierCard
-              key={supplier.id}
-              supplier={supplier}
-              layout="list"
-              isFavorite={isSaved(supplier.id, 'supplier')}
-              onFavoritePress={() => toggleSaved(supplier.id, 'supplier')}
-            />
-          ))}
-        </View>
+        {filteredSuppliers.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="search-off" size={40} color={theme.colors.onSurfaceVariant} />
+            <Text style={styles.emptyTitle}>No suppliers found</Text>
+            <Text style={styles.emptyBody}>
+              Try a different name or category, such as cement, steel, or roofing.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {filteredSuppliers.map((supplier) => (
+              <SupplierCard
+                key={supplier.id}
+                supplier={supplier}
+                layout="list"
+                isFavorite={isSaved(supplier.id, 'supplier')}
+                onFavoritePress={() => toggleSaved(supplier.id, 'supplier')}
+                onPress={() => handleSupplierPress(supplier.id)}
+              />
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -106,6 +130,23 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: theme.spacing.md,
-    marginTop: theme.spacing.sm,
+  },
+  emptyState: {
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.stackLg,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  emptyTitle: {
+    fontFamily: theme.typography.fontFamily.headline,
+    fontSize: theme.typography.fontSize.headlineSm,
+    color: theme.colors.onSurface,
+  },
+  emptyBody: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    lineHeight: theme.typography.lineHeight.bodyMd,
+    color: theme.colors.onSurfaceVariant,
+    textAlign: 'center',
   },
 });
