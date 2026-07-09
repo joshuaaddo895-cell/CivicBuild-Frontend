@@ -3,7 +3,14 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { VerificationScreenProps } from '@appTypes/navigation';
-import { createEmptyVerificationForm, updateVerificationField } from '@appTypes/verification';
+import {
+  createEmptyVerificationForm,
+  getRequiredVerificationDocumentTypes,
+  isVerificationFormValid,
+  setVerificationDocument,
+  updateVerificationField,
+} from '@appTypes/verification';
+import type { VerificationDocumentType } from '@appTypes/verificationDocuments';
 import { AuthDecorBackground, AuthErrorBanner } from '@components/auth';
 import {
   OnboardingProgressTracker,
@@ -23,6 +30,10 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
   const completeOnboarding = useAuthStore((state) => state.completeOnboarding);
 
   const config = useMemo(() => getVerificationConfig(accountType), [accountType]);
+  const requiredDocumentTypes = useMemo(
+    () => getRequiredVerificationDocumentTypes('construction'),
+    [],
+  );
 
   const [formValues, setFormValues] = useState(createEmptyVerificationForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,12 +45,34 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     }
   }, [config, navigation]);
 
+  const handleDocumentUploaded = useCallback(
+    (document: { documentId: string; documentType: VerificationDocumentType }) => {
+      setFormValues((current) => ({
+        ...current,
+        documents: setVerificationDocument(current.documents, document),
+      }));
+    },
+    [],
+  );
+
+  const handleViewDocument = useCallback(
+    (documentType: VerificationDocumentType) => {
+      navigation.navigate('VerificationDocumentPreview', { documentType });
+    },
+    [navigation],
+  );
+
   const handleSubmit = useCallback(async () => {
     setSubmitError('');
+
+    if (!isVerificationFormValid(formValues, requiredDocumentTypes)) {
+      setSubmitError('Complete all fields and upload the required verification documents.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
       useAuthStore.getState().setVerificationStatus('pending');
       useAuthStore.getState().setManagedAgencyId('buildstrong-ltd');
       completeOnboarding();
@@ -48,7 +81,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     } finally {
       setIsSubmitting(false);
     }
-  }, [completeOnboarding]);
+  }, [completeOnboarding, formValues, requiredDocumentTypes]);
 
   if (!config) {
     return null;
@@ -91,13 +124,15 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
               />
             ) : null}
 
-            <VerificationUploadField
-              config={config.upload}
-              document={formValues.document}
-              onDocumentChange={(document) =>
-                setFormValues((current) => updateVerificationField(current, 'document', document))
-              }
-            />
+            {config.uploads.map((uploadConfig) => (
+              <VerificationUploadField
+                key={uploadConfig.documentType}
+                config={uploadConfig}
+                uploadedDocument={formValues.documents[uploadConfig.documentType] ?? null}
+                onDocumentUploaded={handleDocumentUploaded}
+                onViewDocument={() => handleViewDocument(uploadConfig.documentType)}
+              />
+            ))}
 
             <VerificationInfoChip />
 

@@ -6,6 +6,7 @@ import AgencyDashboardScreen from '@screens/agency/AgencyDashboardScreen';
 import AgencyOrderDetailScreen from '@screens/agency/AgencyOrderDetailScreen';
 import AgencyOrdersScreen from '@screens/agency/AgencyOrdersScreen';
 import AgencyPersonnelScreen from '@screens/agency/AgencyPersonnelScreen';
+import AgencyPortfolioScreen from '@screens/agency/AgencyPortfolioScreen';
 import AgencyPostFormScreen from '@screens/agency/AgencyPostFormScreen';
 import AgencyPostsScreen from '@screens/agency/AgencyPostsScreen';
 import AgencyProductFormScreen from '@screens/agency/AgencyProductFormScreen';
@@ -34,6 +35,7 @@ export default function AgencyStackNavigator() {
       <Stack.Screen name="AgencyPosts" component={AgencyPostsScreen} />
       <Stack.Screen name="AgencyPostForm" component={AgencyPostFormScreen} />
       <Stack.Screen name="AgencyPersonnel" component={AgencyPersonnelScreen} />
+      <Stack.Screen name="AgencyPortfolio" component={AgencyPortfolioScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />

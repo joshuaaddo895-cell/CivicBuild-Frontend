@@ -1,11 +1,22 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { DeliveryProviderSetupScreenProps } from '@appTypes/navigation';
+import {
+  areRequiredVerificationDocumentsUploaded,
+  setVerificationDocument,
+  type VerificationDocumentsState,
+} from '@appTypes/verification';
+import type { VerificationDocumentType } from '@appTypes/verificationDocuments';
 import { AuthDecorBackground, AuthErrorBanner, AuthInput } from '@components/auth';
 import { ConstructionAgencySelect, ProfilePhotoPicker } from '@components/delivery';
-import { OnboardingContinueButton, OnboardingHeader } from '@components/onboarding';
+import {
+  OnboardingContinueButton,
+  OnboardingHeader,
+  VerificationUploadField,
+} from '@components/onboarding';
+import { DELIVERY_VERIFICATION_UPLOADS } from '@constants/verificationFieldsConfig';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 import { formatUserDisplayName } from '@utils/mockAuth';
@@ -17,12 +28,32 @@ export default function DeliveryProviderSetupScreen({
   const submitDeliveryProviderSetup = useAuthStore((state) => state.submitDeliveryProviderSetup);
 
   const defaultFullName = useMemo(() => formatUserDisplayName(user), [user]);
+  const requiredDocumentTypes = useMemo<VerificationDocumentType[]>(
+    () => ['GOVERNMENT_ID', 'PROFESSIONAL_LICENSE'],
+    [],
+  );
 
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [fullName, setFullName] = useState(defaultFullName);
   const [constructionAgencyId, setConstructionAgencyId] = useState<string | null>(null);
+  const [vehicleInfo, setVehicleInfo] = useState('');
+  const [documents, setDocuments] = useState<VerificationDocumentsState>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  const handleDocumentUploaded = useCallback(
+    (document: { documentId: string; documentType: VerificationDocumentType }) => {
+      setDocuments((current) => setVerificationDocument(current, document));
+    },
+    [],
+  );
+
+  const handleViewDocument = useCallback(
+    (documentType: VerificationDocumentType) => {
+      navigation.navigate('VerificationDocumentPreview', { documentType });
+    },
+    [navigation],
+  );
 
   const handleSubmit = async () => {
     setSubmitError('');
@@ -32,15 +63,24 @@ export default function DeliveryProviderSetupScreen({
       return;
     }
 
+    if (!vehicleInfo.trim()) {
+      setSubmitError('Please enter your vehicle information.');
+      return;
+    }
+
+    if (!areRequiredVerificationDocumentsUploaded(documents, requiredDocumentTypes)) {
+      setSubmitError('Upload your government ID and license documents before submitting.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
       submitDeliveryProviderSetup({
         profileImageUri,
         fullName: fullName.trim() || defaultFullName,
         constructionAgencyId,
-        vehicleInfo: 'Delivery vehicle · Greater Accra',
+        vehicleInfo: vehicleInfo.trim(),
       });
       navigation.navigate('PendingCompanyConfirmation');
     } catch {
@@ -65,7 +105,7 @@ export default function DeliveryProviderSetupScreen({
           <View style={styles.inner}>
             <OnboardingHeader
               title="Delivery Provider Setup"
-              subtitle="Complete your profile and link to a construction company on CivicBuild."
+              subtitle="Complete your profile, upload verification documents, and link to a construction company."
             />
 
             {submitError ? <AuthErrorBanner message={submitError} /> : null}
@@ -83,10 +123,29 @@ export default function DeliveryProviderSetupScreen({
                 autoCorrect={false}
               />
 
+              <AuthInput
+                label="Vehicle Information"
+                placeholder="e.g. Toyota Hilux · Greater Accra · GH-1234-20"
+                value={vehicleInfo}
+                onChangeText={setVehicleInfo}
+                autoCapitalize="sentences"
+                autoCorrect={false}
+              />
+
               <ConstructionAgencySelect
                 selectedAgencyId={constructionAgencyId}
                 onSelect={setConstructionAgencyId}
               />
+
+              {DELIVERY_VERIFICATION_UPLOADS.map((uploadConfig) => (
+                <VerificationUploadField
+                  key={uploadConfig.documentType}
+                  config={uploadConfig}
+                  uploadedDocument={documents[uploadConfig.documentType] ?? null}
+                  onDocumentUploaded={handleDocumentUploaded}
+                  onViewDocument={() => handleViewDocument(uploadConfig.documentType)}
+                />
+              ))}
 
               <OnboardingContinueButton
                 label="Submit for Company Review"

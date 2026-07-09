@@ -9,12 +9,17 @@ import type {
   NativeStackScreenProps,
 } from '@react-navigation/native-stack';
 
+import type { VerificationDocumentType } from '@appTypes/verificationDocuments';
+
 // ─── Onboarding Stack ─────────────────────────────────────────────────────────
 export type OnboardingStackParamList = {
   RoleSelection: undefined;
   Verification: undefined;
   DeliveryProviderSetup: undefined;
   PendingCompanyConfirmation: undefined;
+  VerificationDocumentPreview: {
+    documentType: VerificationDocumentType;
+  };
 };
 
 // ─── Auth Stack ───────────────────────────────────────────────────────────────
@@ -67,6 +72,7 @@ export type AgencyStackParamList = {
   AgencyPosts: undefined;
   AgencyPostForm: { postId?: string };
   AgencyPersonnel: undefined;
+  AgencyPortfolio: undefined;
   Notifications: undefined;
   Settings: undefined;
   ChangePassword: undefined;
@@ -128,6 +134,10 @@ export type DeliveryProviderSetupScreenProps = NativeStackScreenProps<
 export type PendingCompanyConfirmationScreenProps = NativeStackScreenProps<
   OnboardingStackParamList,
   'PendingCompanyConfirmation'
+>;
+export type VerificationDocumentPreviewScreenProps = NativeStackScreenProps<
+  OnboardingStackParamList,
+  'VerificationDocumentPreview'
 >;
 
 export type HomeMainScreenProps = CompositeScreenProps<
@@ -284,6 +294,14 @@ export type AgencyPostFormScreenProps = CompositeScreenProps<
 
 export type AgencyPersonnelScreenProps = CompositeScreenProps<
   NativeStackScreenProps<AgencyStackParamList, 'AgencyPersonnel'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type AgencyPortfolioScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<AgencyStackParamList, 'AgencyPortfolio'>,
   CompositeScreenProps<
     BottomTabScreenProps<MainTabParamList, 'Home'>,
     NativeStackScreenProps<RootStackParamList>

@@ -3,28 +3,40 @@ import * as DocumentPicker from 'expo-document-picker';
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { VerificationDocument } from '@appTypes/verification';
-import { MAX_UPLOAD_BYTES } from '@appTypes/verification';
-import type { VerificationUploadConfig } from '@constants/verificationFieldsConfig';
+import { getVerificationUploadErrorMessage, uploadVerificationDocument } from '@api/verification';
+import type {
+  LocalUploadFile,
+  UploadedVerificationDocument,
+} from '@appTypes/verificationDocuments';
+import { ResendSuccessToast } from '@components/auth';
+import type { VerificationUploadFieldConfig } from '@constants/verificationFieldsConfig';
 import theme from '@theme/index';
+import { validateVerificationUpload } from '@utils/uploadValidation';
 
 interface VerificationUploadFieldProps {
-  config: VerificationUploadConfig;
-  document: VerificationDocument | null;
-  onDocumentChange: (document: VerificationDocument | null) => void;
+  config: VerificationUploadFieldConfig;
+  uploadedDocument: UploadedVerificationDocument | null;
+  onDocumentUploaded: (document: UploadedVerificationDocument) => void;
+  onViewDocument: () => void;
 }
 
 export default function VerificationUploadField({
   config,
-  document,
-  onDocumentChange,
+  uploadedDocument,
+  onDocumentUploaded,
+  onViewDocument,
 }: VerificationUploadFieldProps) {
-  const [isPicking, setIsPicking] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [successVisible, setSuccessVisible] = useState(false);
+
+  const hasDocument = Boolean(uploadedDocument?.documentId);
+  const actionLabel = hasDocument ? 'Replace document' : config.title;
 
   const handlePick = async () => {
     setErrorMessage('');
-    setIsPicking(true);
+    setIsUploading(true);
 
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -38,22 +50,38 @@ export default function VerificationUploadField({
       }
 
       const asset = result.assets[0];
-
-      if (asset.size && asset.size > MAX_UPLOAD_BYTES) {
-        setErrorMessage('File exceeds the 10MB limit. Please choose a smaller file.');
-        return;
-      }
-
-      onDocumentChange({
+      const localFile: LocalUploadFile = {
         uri: asset.uri,
         name: asset.name,
         mimeType: asset.mimeType ?? undefined,
         size: asset.size ?? undefined,
+      };
+
+      const validationError = validateVerificationUpload(localFile);
+      if (validationError) {
+        setErrorMessage(validationError);
+        return;
+      }
+
+      const uploadResult = await uploadVerificationDocument(config.documentType, localFile);
+      if (!uploadResult.ok) {
+        setErrorMessage(getVerificationUploadErrorMessage(uploadResult.error));
+        return;
+      }
+
+      onDocumentUploaded({
+        documentId: uploadResult.data.documentId,
+        documentType: uploadResult.data.documentType,
       });
+
+      setSuccessMessage(
+        hasDocument ? 'Document replaced successfully.' : 'Document uploaded successfully.',
+      );
+      setSuccessVisible(true);
     } catch {
-      setErrorMessage('Unable to open file picker. Please try again.');
+      setErrorMessage('Unable to upload document. Please try again.');
     } finally {
-      setIsPicking(false);
+      setIsUploading(false);
     }
   };
 
@@ -62,44 +90,61 @@ export default function VerificationUploadField({
       <Text style={styles.label}>{config.sectionLabel}</Text>
       <Pressable
         onPress={handlePick}
-        disabled={isPicking}
+        disabled={isUploading}
         style={({ pressed }) => [
           styles.dropzone,
-          pressed && styles.dropzonePressed,
-          document && styles.dropzoneFilled,
+          pressed && !isUploading && styles.dropzonePressed,
+          hasDocument && styles.dropzoneFilled,
         ]}
         accessibilityRole="button"
-        accessibilityLabel="Upload verification document"
+        accessibilityLabel={actionLabel}
         accessibilityHint={config.subtitle}
       >
-        {isPicking ? (
+        {isUploading ? (
           <ActivityIndicator color={theme.colors.primary} />
         ) : (
           <>
             <View style={styles.iconCircle}>
-              <MaterialIcons name="cloud-upload" size={32} color={theme.colors.primary} />
+              <MaterialIcons
+                name={hasDocument ? 'check-circle' : 'cloud-upload'}
+                size={32}
+                color={theme.colors.primary}
+              />
             </View>
-            <Text style={styles.title}>{document ? document.name : config.title}</Text>
+            <Text style={styles.title}>{actionLabel}</Text>
             <Text style={styles.subtitle}>{config.subtitle}</Text>
             <Text style={styles.example}>{config.example}</Text>
+            {hasDocument ? (
+              <Text style={styles.uploadedHint}>
+                Document on file — upload again to replace the previous version.
+              </Text>
+            ) : null}
           </>
         )}
       </Pressable>
-      {document ? (
+
+      {hasDocument ? (
         <Pressable
-          onPress={() => onDocumentChange(null)}
-          style={styles.removeButton}
+          onPress={onViewDocument}
+          style={styles.viewButton}
           accessibilityRole="button"
-          accessibilityLabel="Remove uploaded document"
+          accessibilityLabel={`View ${config.sectionLabel}`}
         >
-          <Text style={styles.removeText}>Remove file</Text>
+          <Text style={styles.viewText}>View uploaded document</Text>
         </Pressable>
       ) : null}
+
       {errorMessage ? (
         <Text style={styles.error} accessibilityRole="alert">
           {errorMessage}
         </Text>
       ) : null}
+
+      <ResendSuccessToast
+        message={successMessage}
+        visible={successVisible}
+        onHide={() => setSuccessVisible(false)}
+      />
     </View>
   );
 }
@@ -165,14 +210,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: theme.spacing.xs,
   },
-  removeButton: {
+  uploadedHint: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    lineHeight: theme.typography.lineHeight.bodySm,
+    color: theme.colors.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: theme.spacing.xs,
+  },
+  viewButton: {
     alignSelf: 'center',
     paddingVertical: theme.spacing.xs,
   },
-  removeText: {
+  viewText: {
     fontFamily: theme.typography.fontFamily.bodySemi,
     fontSize: theme.typography.fontSize.bodySm,
-    color: theme.colors.error,
+    color: theme.colors.primary,
   },
   error: {
     fontFamily: theme.typography.fontFamily.body,

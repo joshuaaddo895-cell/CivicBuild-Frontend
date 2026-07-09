@@ -1,4 +1,5 @@
 import type { AccountType } from '@appTypes/onboarding';
+import type { VerificationDocumentType } from '@appTypes/verificationDocuments';
 
 export type VerificationFieldId = 'businessName' | 'category';
 
@@ -17,7 +18,8 @@ export interface VerificationFieldConfig {
   options?: VerificationSelectOption[];
 }
 
-export interface VerificationUploadConfig {
+export interface VerificationUploadFieldConfig {
+  documentType: VerificationDocumentType;
   sectionLabel: string;
   title: string;
   subtitle: string;
@@ -26,7 +28,7 @@ export interface VerificationUploadConfig {
 
 export interface VerificationRoleConfig {
   fields: VerificationFieldConfig[];
-  upload: VerificationUploadConfig;
+  uploads: VerificationUploadFieldConfig[];
 }
 
 export const CONSTRUCTION_VERIFICATION_CONFIG: VerificationRoleConfig = {
@@ -51,13 +53,40 @@ export const CONSTRUCTION_VERIFICATION_CONFIG: VerificationRoleConfig = {
       ],
     },
   ],
-  upload: {
-    sectionLabel: 'Verification Documents',
-    title: 'Click or tap to upload',
-    subtitle: 'PDF, JPG, or PNG (Max. 10MB)',
-    example: 'Example: Contractor License, Portfolio PDF',
-  },
+  uploads: [
+    {
+      documentType: 'BUSINESS_REGISTRATION',
+      sectionLabel: 'Business Registration',
+      title: 'Upload business registration',
+      subtitle: 'PDF, JPG, or PNG (max 5MB)',
+      example: 'Example: Certificate of incorporation, business registration certificate',
+    },
+    {
+      documentType: 'PROFESSIONAL_LICENSE',
+      sectionLabel: 'Professional / Contractor License',
+      title: 'Upload professional license',
+      subtitle: 'PDF, JPG, or PNG (max 5MB)',
+      example: "Example: Contractor's license, professional certification",
+    },
+  ],
 };
+
+export const DELIVERY_VERIFICATION_UPLOADS: VerificationUploadFieldConfig[] = [
+  {
+    documentType: 'GOVERNMENT_ID',
+    sectionLabel: 'Government ID',
+    title: 'Upload government-issued ID',
+    subtitle: 'PDF, JPG, or PNG (max 5MB)',
+    example: 'Example: National ID, passport, voter ID',
+  },
+  {
+    documentType: 'PROFESSIONAL_LICENSE',
+    sectionLabel: "Driver's / Professional License",
+    title: 'Upload license document',
+    subtitle: 'PDF, JPG, or PNG (max 5MB)',
+    example: "Example: Driver's license, professional driving permit",
+  },
+];
 
 export function getVerificationConfig(
   accountType: AccountType | null,

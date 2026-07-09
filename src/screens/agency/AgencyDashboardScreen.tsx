@@ -1,5 +1,6 @@
+import { Image } from 'expo-image';
 import React, { useEffect, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AgencyDashboardScreenProps } from '@appTypes/navigation';
@@ -7,6 +8,7 @@ import { DashboardPreviewCard } from '@components/agency';
 import { DashboardHeader, ProductGrid, SectionHeader } from '@components/dashboard';
 import { findConstructionAgencyById } from '@constants/constructionAgencies';
 import { formatOrderItemSummary, getOrdersByAgencyId } from '@constants/mockAgencyOrders';
+import { useAgencyPortfolioStore } from '@store/agencyPortfolioStore';
 import { useAgencyPostsStore } from '@store/agencyPostsStore';
 import { useAuthStore } from '@store/authStore';
 import { useDeliveryPersonnelStore } from '@store/deliveryPersonnelStore';
@@ -28,14 +30,51 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
     () => getProductsByAgencyId(agencyId),
     [agencyId, extraProducts, getProductsByAgencyId, productOverrides, removedProductIds],
   );
+
   const seedPosts = useAgencyPostsStore((state) => state.seedIfNeeded);
-  const agencyPosts = useAgencyPostsStore((state) => state.getPostsByAgencyId(agencyId));
-  const seedPersonnel = useDeliveryPersonnelStore((state) => state.seedIfNeeded);
-  const pendingPersonnel = useDeliveryPersonnelStore((state) =>
-    state.getPendingByAgencyId(agencyId),
+  const allPosts = useAgencyPostsStore((state) => state.posts);
+  const agencyPosts = useMemo(
+    () =>
+      allPosts
+        .filter((post) => post.agencyId === agencyId)
+        .sort(
+          (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+        ),
+    [agencyId, allPosts],
   );
-  const approvedPersonnel = useDeliveryPersonnelStore((state) =>
-    state.getApprovedByAgencyId(agencyId),
+
+  const seedPersonnel = useDeliveryPersonnelStore((state) => state.seedIfNeeded);
+  const allPersonnel = useDeliveryPersonnelStore((state) => state.personnel);
+  const pendingPersonnel = useMemo(
+    () =>
+      allPersonnel
+        .filter(
+          (entry) => entry.constructionAgencyId === agencyId && entry.approvalStatus === 'pending',
+        )
+        .sort(
+          (left, right) =>
+            new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime(),
+        ),
+    [agencyId, allPersonnel],
+  );
+  const approvedPersonnel = useMemo(
+    () =>
+      allPersonnel
+        .filter(
+          (entry) => entry.constructionAgencyId === agencyId && entry.approvalStatus === 'approved',
+        )
+        .sort(
+          (left, right) =>
+            new Date(right.handledAt ?? right.submittedAt).getTime() -
+            new Date(left.handledAt ?? left.submittedAt).getTime(),
+        ),
+    [agencyId, allPersonnel],
+  );
+
+  const allPortfolioImages = useAgencyPortfolioStore((state) => state.imagesByAgencyId);
+  const portfolioImages = useMemo(
+    () => allPortfolioImages[agencyId] ?? [],
+    [agencyId, allPortfolioImages],
   );
 
   const agency = findConstructionAgencyById(agencyId);
@@ -70,6 +109,41 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
           <Text style={styles.heroSubtitle}>
             Manage products, orders, announcements, and delivery personnel.
           </Text>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader
+            title="Portfolio"
+            actionLabel="Manage"
+            onActionPress={() => navigation.navigate('AgencyPortfolio')}
+          />
+          {portfolioImages.length === 0 ? (
+            <Pressable
+              onPress={() => navigation.navigate('AgencyPortfolio')}
+              accessibilityRole="button"
+              accessibilityLabel="Add portfolio item"
+            >
+              <Text style={styles.previewEmpty}>
+                No portfolio images yet — tap to add your first project photo.
+              </Text>
+            </Pressable>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.portfolioRow}
+            >
+              {portfolioImages.slice(0, 6).map((image) => (
+                <Image
+                  key={image.imageId}
+                  source={{ uri: image.deliveryUrl }}
+                  style={styles.portfolioThumb}
+                  contentFit="cover"
+                  accessibilityLabel="Portfolio image"
+                />
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -192,5 +266,14 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.onSurfaceVariant,
     paddingVertical: theme.spacing.sm,
+  },
+  portfolioRow: {
+    gap: theme.spacing.sm,
+  },
+  portfolioThumb: {
+    width: 120,
+    height: 90,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surfaceContainerHigh,
   },
 });
