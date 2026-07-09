@@ -1,6 +1,6 @@
 import type { Product } from '@appTypes/marketplace';
 import { VERIFIED_CONSTRUCTION_AGENCIES } from '@constants/constructionAgencies';
-import { TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
+import { ALL_SUPPLIERS } from '@constants/mockSuppliers';
 import { formatUnitSuffix } from '@utils/paystackAmount';
 
 const BRAND_PREFIXES = [
@@ -154,7 +154,7 @@ function resolveSupplierId(supplierName?: string): string | undefined {
   }
 
   const normalized = supplierName.trim().toLowerCase();
-  const match = TRUSTED_SUPPLIERS.find(
+  const match = ALL_SUPPLIERS.find(
     (supplier) =>
       supplier.name.toLowerCase() === normalized ||
       normalized.includes(supplier.name.toLowerCase()) ||

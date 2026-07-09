@@ -14,7 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { SavedScreenProps } from '@appTypes/navigation';
 import { CategoryChipList, ScrollToTopButton } from '@components/dashboard';
-import { MARKETPLACE_CATEGORIES, POPULAR_PRODUCTS } from '@constants/marketplaceData';
+import { MARKETPLACE_CATEGORIES } from '@constants/marketplaceData';
+import { getPopularProducts } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 import { resolveSavedItemDetail } from '@utils/roleLabels';
@@ -24,6 +25,8 @@ export default function SavedScreen(_props: SavedScreenProps) {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const items = useSavedStore((state) => state.items);
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+
+  const popularProducts = useMemo(() => getPopularProducts(), []);
 
   const filteredItems = useMemo(() => {
     const sorted = [...items].sort(
@@ -39,10 +42,10 @@ export default function SavedScreen(_props: SavedScreenProps) {
         return false;
       }
 
-      const product = POPULAR_PRODUCTS.find((entry) => entry.id === item.id);
+      const product = popularProducts.find((entry) => entry.id === item.id);
       return product?.category.toLowerCase() === selectedCategoryId.toLowerCase();
     });
-  }, [items, selectedCategoryId]);
+  }, [items, popularProducts, selectedCategoryId]);
 
   const savedDetails = useMemo(
     () =>

@@ -164,3 +164,8 @@ export function getMarketplaceProducts(): Product[] {
   useProductStore.getState().initialize();
   return useProductStore.getState().getAllProducts();
 }
+
+/** Live marketplace catalog — merges seed data with agency CRUD from productStore. */
+export function getPopularProducts(): Product[] {
+  return getMarketplaceProducts();
+}

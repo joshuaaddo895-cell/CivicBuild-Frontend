@@ -49,6 +49,7 @@ interface DeliveryPersonnelActions {
   approvePersonnel: (personnelId: string) => DeliveryPersonnelRecord | undefined;
   rejectPersonnel: (personnelId: string) => DeliveryPersonnelRecord | undefined;
   findPersonnelByUserId: (userId: string) => DeliveryPersonnelRecord | undefined;
+  withdrawAssociationRequest: (userId: string) => void;
 }
 
 type DeliveryPersonnelStore = DeliveryPersonnelState & DeliveryPersonnelActions;
@@ -205,6 +206,12 @@ export const useDeliveryPersonnelStore = create<DeliveryPersonnelStore>()(
         }));
 
         return updated;
+      },
+
+      withdrawAssociationRequest: (userId) => {
+        set((state) => ({
+          personnel: state.personnel.filter((entry) => entry.userId !== userId),
+        }));
       },
     }),
     {

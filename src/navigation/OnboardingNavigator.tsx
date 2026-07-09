@@ -38,8 +38,12 @@ function getInitialOnboardingRoute(): keyof OnboardingStackParamList {
 }
 
 export default function OnboardingNavigator() {
+  const accountType = useAuthStore((state) => state.accountType);
+  const deliveryProviderStatus = useAuthStore((state) => state.deliveryProviderStatus);
+
   return (
     <Stack.Navigator
+      key={`${accountType ?? 'unset'}:${deliveryProviderStatus}`}
       initialRouteName={getInitialOnboardingRoute()}
       screenOptions={{
         headerShown: false,

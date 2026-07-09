@@ -59,9 +59,12 @@ interface AuthActions {
   rejectDeliveryProvider: () => void;
   setManagedAgencyId: (agencyId: string) => void;
   syncDeliveryProviderApproval: () => void;
+  cancelDeliveryProviderRequest: () => void;
 }
 
 type AuthStore = AuthState & AuthActions;
+
+const AUTH_PERSIST_VERSION = 3;
 
 const emptyOnboardingState: Pick<
   AuthState,
@@ -117,6 +120,68 @@ function applyOnboardingProfile(profile: OnboardingProfile | undefined) {
   };
 }
 
+function getApplicableOnboarding(user: User | null, profile: OnboardingProfile | undefined) {
+  if (!user?.id || !profile) {
+    return emptyOnboardingState;
+  }
+
+  if (profile.onboardingComplete) {
+    return applyOnboardingProfile(profile);
+  }
+
+  if (!profile.accountType) {
+    return emptyOnboardingState;
+  }
+
+  if (profile.accountType === 'delivery') {
+    const remoteStatus = useDeliveryPersonnelStore.getState().getStatusForUser(user.id);
+
+    if (
+      profile.deliveryProviderStatus === 'pending_company_confirmation' ||
+      profile.deliveryProviderStatus === 'rejected'
+    ) {
+      const expectedStatus =
+        profile.deliveryProviderStatus === 'pending_company_confirmation' ? 'pending' : 'rejected';
+
+      if (remoteStatus !== expectedStatus) {
+        return emptyOnboardingState;
+      }
+    }
+
+    return applyOnboardingProfile(profile);
+  }
+
+  if (profile.accountType === 'construction') {
+    return applyOnboardingProfile(profile);
+  }
+
+  return emptyOnboardingState;
+}
+
+function resolveActiveOnboarding(state: Pick<AuthState, 'user' | 'onboardingProfilesByUserId'>) {
+  if (!state.user?.id) {
+    return emptyOnboardingState;
+  }
+
+  return getApplicableOnboarding(state.user, state.onboardingProfilesByUserId[state.user.id]);
+}
+
+function migratePersistedAuth(persisted: unknown, version: number) {
+  const state = (persisted ?? {}) as Partial<AuthState>;
+  const profiles = { ...(state.onboardingProfilesByUserId ?? {}) };
+  const userId = state.user?.id;
+
+  if (version < AUTH_PERSIST_VERSION && userId && !profiles[userId] && state.accountType != null) {
+    profiles[userId] = snapshotOnboarding(state as AuthState);
+  }
+
+  return {
+    user: state.user ?? null,
+    isAuthenticated: Boolean(state.isAuthenticated),
+    onboardingProfilesByUserId: profiles,
+  };
+}
+
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => {
@@ -145,7 +210,8 @@ export const useAuthStore = create<AuthStore>()(
             accessToken,
             refreshToken,
             isAuthenticated: true,
-            ...applyOnboardingProfile(profile),
+            ...emptyOnboardingState,
+            ...getApplicableOnboarding(user, profile),
           });
         },
 
@@ -194,15 +260,14 @@ export const useAuthStore = create<AuthStore>()(
             getStoredRefreshToken(),
           ]);
 
-          if (accessToken && refreshToken) {
-            const { user, onboardingProfilesByUserId } = get();
-            const profile = user?.id ? onboardingProfilesByUserId[user.id] : undefined;
+          const { user, onboardingProfilesByUserId } = get();
 
+          if (accessToken && refreshToken) {
             set({
               accessToken,
               refreshToken,
               isAuthenticated: true,
-              ...(profile ? applyOnboardingProfile(profile) : {}),
+              ...resolveActiveOnboarding({ user, onboardingProfilesByUserId }),
             });
             return;
           }
@@ -211,11 +276,15 @@ export const useAuthStore = create<AuthStore>()(
             accessToken: null,
             refreshToken: null,
             isAuthenticated: false,
+            ...emptyOnboardingState,
           });
         },
 
         setAccountType: (accountType) => {
-          set({ accountType });
+          set({
+            ...emptyOnboardingState,
+            accountType,
+          });
           syncOnboardingProfile();
         },
 
@@ -273,6 +342,16 @@ export const useAuthStore = create<AuthStore>()(
 
           const remoteStatus = useDeliveryPersonnelStore.getState().getStatusForUser(user.id);
           if (!remoteStatus) {
+            if (
+              deliveryProviderStatus === 'pending_company_confirmation' ||
+              deliveryProviderStatus === 'rejected'
+            ) {
+              set({
+                ...emptyOnboardingState,
+                accountType: null,
+              });
+              syncOnboardingProfile();
+            }
             return;
           }
 
@@ -285,23 +364,39 @@ export const useAuthStore = create<AuthStore>()(
             get().rejectDeliveryProvider();
           }
         },
+
+        cancelDeliveryProviderRequest: () => {
+          const userId = get().user?.id;
+          if (userId) {
+            useDeliveryPersonnelStore.getState().withdrawAssociationRequest(userId);
+          }
+
+          set({
+            ...emptyOnboardingState,
+            accountType: null,
+          });
+          syncOnboardingProfile();
+        },
       };
     },
     {
       name: 'civicbuild-auth-storage',
+      version: AUTH_PERSIST_VERSION,
+      migrate: migratePersistedAuth,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
-        accountType: state.accountType,
-        onboardingComplete: state.onboardingComplete,
-        verificationStatus: state.verificationStatus,
-        deliveryProviderProfile: state.deliveryProviderProfile,
-        deliveryProviderStatus: state.deliveryProviderStatus,
-        managedAgencyId: state.managedAgencyId,
         onboardingProfilesByUserId: state.onboardingProfilesByUserId,
       }),
-      onRehydrateStorage: () => () => {
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          useAuthStore.setState({
+            ...emptyOnboardingState,
+            ...resolveActiveOnboarding(state),
+          });
+        }
+
         (async () => {
           await useAuthStore.getState().restoreSessionFromSecureStorage();
           useAuthStore.getState().setHasHydrated(true);

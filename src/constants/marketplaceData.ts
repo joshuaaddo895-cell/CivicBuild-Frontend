@@ -1,5 +1,4 @@
 import type { MarketplaceCategory, Product, Supplier } from '@appTypes/marketplace';
-import { getMarketplaceProducts } from '@store/productStore';
 
 import { ALL_SUPPLIERS, DASHBOARD_SUPPLIER_LIMIT } from './mockSuppliers';
 
@@ -23,14 +22,6 @@ export const TRUSTED_SUPPLIERS: Supplier[] = ALL_SUPPLIERS;
 
 /** Subset shown in the dashboard horizontal carousel. */
 export const DASHBOARD_SUPPLIERS: Supplier[] = ALL_SUPPLIERS.slice(0, DASHBOARD_SUPPLIER_LIMIT);
-
-/** Live marketplace catalog — merges seed data with agency CRUD from productStore. */
-export function getPopularProducts(): Product[] {
-  return getMarketplaceProducts();
-}
-
-/** @deprecated Use getPopularProducts() for the live catalog. */
-export const POPULAR_PRODUCTS: Product[] = getMarketplaceProducts();
 
 export function filterProductsByCategory(products: Product[], categoryId: string): Product[] {
   if (categoryId === 'all') {

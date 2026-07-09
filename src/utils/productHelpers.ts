@@ -1,6 +1,7 @@
 import type { Product, Supplier } from '@appTypes/marketplace';
-import { getPopularProducts, TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
+import { TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
 import { MESSAGE_THREADS } from '@constants/messagesData';
+import { getPopularProducts } from '@store/productStore';
 
 export function findProductById(productId: string): Product | undefined {
   return getPopularProducts().find((product) => product.id === productId);

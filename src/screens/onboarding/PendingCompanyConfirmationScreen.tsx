@@ -1,15 +1,39 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useCallback } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { PendingCompanyConfirmationScreenProps } from '@appTypes/navigation';
 import { AuthDecorBackground } from '@components/auth';
+import DeleteAccountModal from '@components/settings/DeleteAccountModal';
 import { findConstructionAgencyById } from '@constants/constructionAgencies';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
+import { performDeleteAccount } from '@utils/session';
+
+function confirmCancelRequest(onConfirm: () => void) {
+  const title = 'Cancel association request?';
+  const message =
+    'This withdraws your pending delivery provider request. You can choose a different account type or submit a new request later.';
+
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) {
+      onConfirm();
+    }
+    return;
+  }
+
+  Alert.alert(title, message, [
+    { text: 'Keep Waiting', style: 'cancel' },
+    {
+      text: 'Cancel Request',
+      style: 'destructive',
+      onPress: onConfirm,
+    },
+  ]);
+}
 
 export default function PendingCompanyConfirmationScreen({
   navigation,
@@ -17,7 +41,13 @@ export default function PendingCompanyConfirmationScreen({
   const deliveryProviderProfile = useAuthStore((state) => state.deliveryProviderProfile);
   const deliveryProviderStatus = useAuthStore((state) => state.deliveryProviderStatus);
   const syncDeliveryProviderApproval = useAuthStore((state) => state.syncDeliveryProviderApproval);
-  const logout = useAuthStore((state) => state.logout);
+  const cancelDeliveryProviderRequest = useAuthStore(
+    (state) => state.cancelDeliveryProviderRequest,
+  );
+
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const agency = findConstructionAgencyById(deliveryProviderProfile?.constructionAgencyId ?? null);
   const isRejected = deliveryProviderStatus === 'rejected';
@@ -28,8 +58,39 @@ export default function PendingCompanyConfirmationScreen({
     }, [syncDeliveryProviderApproval]),
   );
 
-  const handleBackToRoles = () => {
-    logout().catch(() => undefined);
+  const resetToRoleSelection = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'RoleSelection' }],
+    });
+  };
+
+  const handleCancelRequest = () => {
+    confirmCancelRequest(() => {
+      cancelDeliveryProviderRequest();
+      resetToRoleSelection();
+    });
+  };
+
+  const handleDeleteAccountConfirm = async () => {
+    setIsDeletingAccount(true);
+    setDeleteError(null);
+
+    try {
+      const result = await performDeleteAccount();
+
+      if (!result.ok) {
+        setDeleteError(result.message);
+        if (result.sessionCleared) {
+          setDeleteModalVisible(false);
+        }
+        return;
+      }
+
+      setDeleteModalVisible(false);
+    } finally {
+      setIsDeletingAccount(false);
+    }
   };
 
   return (
@@ -99,6 +160,20 @@ export default function PendingCompanyConfirmationScreen({
             </Text>
           </View>
 
+          {!isRejected ? (
+            <Pressable
+              onPress={handleCancelRequest}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed && styles.secondaryButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel association request"
+            >
+              <Text style={styles.secondaryButtonText}>Cancel Request</Text>
+            </Pressable>
+          ) : null}
+
           <Pressable
             onPress={() => navigation.navigate('DeliveryProviderSetup')}
             style={({ pressed }) => [
@@ -108,19 +183,45 @@ export default function PendingCompanyConfirmationScreen({
             accessibilityRole="button"
             accessibilityLabel="Edit delivery provider profile"
           >
-            <Text style={styles.secondaryButtonText}>Edit Profile</Text>
+            <Text style={styles.secondaryButtonText}>
+              {isRejected ? 'Edit & Resubmit' : 'Edit Profile'}
+            </Text>
           </Pressable>
 
+          {isRejected ? (
+            <Pressable
+              onPress={handleCancelRequest}
+              style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Choose a different account type"
+            >
+              <Text style={styles.linkButtonText}>Choose Different Account Type</Text>
+            </Pressable>
+          ) : null}
+
           <Pressable
-            onPress={handleBackToRoles}
+            onPress={() => setDeleteModalVisible(true)}
             style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}
             accessibilityRole="button"
-            accessibilityLabel="Sign out and return to sign in"
+            accessibilityLabel="Delete account"
           >
-            <Text style={styles.linkButtonText}>Sign Out</Text>
+            <Text style={styles.linkButtonText}>Delete Account</Text>
           </Pressable>
         </View>
       </ScrollView>
+
+      <DeleteAccountModal
+        visible={deleteModalVisible}
+        loading={isDeletingAccount}
+        errorMessage={deleteError}
+        onCancel={() => {
+          if (!isDeletingAccount) {
+            setDeleteModalVisible(false);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={handleDeleteAccountConfirm}
+      />
     </SafeAreaView>
   );
 }

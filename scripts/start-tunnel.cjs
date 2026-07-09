@@ -13,6 +13,7 @@ const http = require('http');
 const { existsSync, readFileSync, readdirSync } = require('fs');
 const { homedir } = require('os');
 const { join, resolve } = require('path');
+const qrcode = require('qrcode-terminal');
 
 const PORT = Number(process.env.EXPO_DEV_SERVER_PORT || 8080);
 const ROOT = resolve(__dirname, '..');
@@ -47,10 +48,82 @@ function sleep(ms) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
+function stopProcessesOnPort(port) {
+  if (!Number.isFinite(port) || port <= 0) {
+    return;
+  }
+
+  const listCommand =
+    process.platform === 'win32' ? `netstat -ano | findstr :${port}` : `lsof -ti:${port}`;
+
+  try {
+    const output = execSync(listCommand, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      env: process.env,
+    }).trim();
+
+    if (!output) {
+      return;
+    }
+
+    const pids =
+      process.platform === 'win32'
+        ? [...new Set(output.split(/\r?\n/).map((line) => line.trim().split(/\s+/).pop()))]
+        : output.split(/\r?\n/).map((entry) => entry.trim());
+
+    for (const pid of pids) {
+      if (!pid || pid === String(process.pid)) {
+        continue;
+      }
+
+      try {
+        process.kill(Number(pid), 'SIGTERM');
+      } catch {
+        // Process may already be gone.
+      }
+    }
+  } catch {
+    // Nothing listening on this port.
+  }
+}
+
+function stopExistingDevServers() {
+  if (process.platform === 'win32') {
+    try {
+      execSync('taskkill /F /IM ngrok.exe /T', { stdio: 'ignore' });
+    } catch {
+      // No ngrok process running.
+    }
+  } else {
+    try {
+      execSync('pkill -f "[n]grok http"', { stdio: 'ignore', env: process.env });
+    } catch {
+      // No ngrok process running.
+    }
+  }
+
+  stopProcessesOnPort(PORT);
+  stopProcessesOnPort(4040);
+  stopProcessesOnPort(4041);
+}
+
+async function waitForNgrokApiToClear(maxAttempts = 10) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      await fetchTunnelUrl();
+      await sleep(300);
+    } catch {
+      return;
+    }
+  }
+}
+
 function getNgrokVersion(commandPath) {
   return execSync(`"${commandPath}" version`, {
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'ignore'],
+    env: process.env,
   }).trim();
 }
 
@@ -91,11 +164,23 @@ function findWindowsWingetNgrok() {
   return null;
 }
 
-function findNgrokCommand() {
+function findNgrokOnPath() {
+  const lookupCommand = process.platform === 'win32' ? 'where ngrok' : 'which ngrok';
   const candidates = [];
 
+  if (process.platform === 'darwin') {
+    candidates.push('/opt/homebrew/bin/ngrok', '/usr/local/bin/ngrok');
+  } else if (process.platform !== 'win32') {
+    candidates.push('/usr/local/bin/ngrok');
+  }
+
   try {
-    const output = execSync('where ngrok', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+    const output = execSync(lookupCommand, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      env: process.env,
+    });
+
     candidates.push(
       ...output
         .trim()
@@ -105,8 +190,14 @@ function findNgrokCommand() {
         .filter((entry) => !entry.toLowerCase().includes('node_modules')),
     );
   } catch {
-    // where.exe may fail if ngrok is not on PATH yet.
+    // ngrok may not be on PATH yet.
   }
+
+  return candidates;
+}
+
+function findNgrokCommand() {
+  const candidates = [...findNgrokOnPath()];
 
   const wingetNgrok = findWindowsWingetNgrok();
   if (wingetNgrok) {
@@ -177,6 +268,22 @@ async function waitForTunnelUrl(maxAttempts = 40) {
   throw new Error('Timed out waiting for ngrok tunnel URL (is port 4040 available?)');
 }
 
+function buildExpoGoUrl(tunnelUrl) {
+  const parsed = new URL(tunnelUrl);
+  const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+
+  return `exp://${parsed.hostname}:${port}`;
+}
+
+function printConnectionInfo(tunnelUrl) {
+  const expoGoUrl = buildExpoGoUrl(tunnelUrl);
+
+  console.log('\nScan this QR code with Expo Go:\n');
+  qrcode.generate(expoGoUrl, { small: true }, (code) => console.log(code));
+  console.log(`Expo Go URL: ${expoGoUrl}`);
+  console.log(`Tunnel URL:  ${tunnelUrl}\n`);
+}
+
 async function main() {
   loadEnvFile('.env.development');
   loadEnvFile('.env.local');
@@ -196,11 +303,20 @@ async function main() {
   if (!ngrokCommand) {
     console.error('\nngrok v3 CLI is not installed.\n');
     console.error('Install it, then run npm run start:tunnel again:\n');
-    console.error('  winget install ngrok.ngrok');
+    if (process.platform === 'darwin') {
+      console.error('  brew install ngrok/ngrok/ngrok');
+    } else if (process.platform === 'win32') {
+      console.error('  winget install ngrok.ngrok');
+    }
     console.error('  — or download from https://ngrok.com/download');
     console.error('\nIf you already installed ngrok, close and reopen this terminal.\n');
     process.exit(1);
   }
+
+  console.log('Stopping any existing Expo/ngrok processes on this port...');
+  stopExistingDevServers();
+  await waitForNgrokApiToClear();
+  await sleep(500);
 
   console.log(`Starting ngrok v3 tunnel on port ${PORT}...`);
 
@@ -244,6 +360,7 @@ async function main() {
   }
 
   console.log(`\nTunnel ready: ${tunnelUrl}\n`);
+  printConnectionInfo(tunnelUrl);
 
   const expoProcess =
     process.platform === 'win32'

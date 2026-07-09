@@ -5,6 +5,7 @@ import { deleteAccount } from '@api/account';
 import { logout as logoutApi } from '@api/auth';
 import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
+import { useDeliveryPersonnelStore } from '@store/deliveryPersonnelStore';
 import { useSavedStore } from '@store/savedStore';
 
 const ACCOUNT_DELETED_TOAST_KEY = 'civicbuild_account_deleted_toast';
@@ -59,6 +60,7 @@ export async function purgeLocalSession(): Promise<void> {
 
   await Promise.all([
     useSavedStore.persist.clearStorage(),
+    useDeliveryPersonnelStore.persist.clearStorage(),
     useAuthStore.getState().logout({ wipeOnboarding: true }),
     useAuthStore.persist.clearStorage(),
   ]);

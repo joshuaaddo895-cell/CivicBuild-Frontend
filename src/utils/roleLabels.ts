@@ -1,7 +1,8 @@
 import type { AccountType, VerificationStatus } from '@appTypes/onboarding';
 import type { SavedItem, SavedItemDetail } from '@appTypes/saved';
 import { VERIFIED_CONSTRUCTION_AGENCIES } from '@constants/constructionAgencies';
-import { getPopularProducts, TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
+import { TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
+import { getPopularProducts } from '@store/productStore';
 import { formatPriceWithUnit } from '@utils/paystackAmount';
 
 export function getAccountTypeLabel(accountType: AccountType | null): string {
