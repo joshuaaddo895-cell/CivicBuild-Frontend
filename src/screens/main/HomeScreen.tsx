@@ -23,7 +23,8 @@ import {
   SectionHeader,
   SupplierCardList,
 } from '@components/dashboard';
-import { filterProductsByCategory, MARKETPLACE_CATEGORIES } from '@constants/marketplaceData';
+import { filterProductsByCategory } from '@constants/marketplaceData';
+import { useMarketplaceCategories } from '@hooks/useMarketplaceCategories';
 import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
 import { useProductStore } from '@store/productStore';
@@ -33,6 +34,7 @@ import { getUserInitials } from '@utils/userInitials';
 
 export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const { categories } = useMarketplaceCategories();
   const user = useAuthStore((state) => state.user);
   const deliveryProviderProfile = useAuthStore((state) => state.deliveryProviderProfile);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -144,7 +146,7 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
         <DashboardSearchBar value={searchQuery} onChangeText={setSearchQuery} />
 
         <CategoryChipList
-          categories={MARKETPLACE_CATEGORIES}
+          categories={categories}
           selectedId={selectedCategoryId}
           onSelect={setSelectedCategoryId}
         />

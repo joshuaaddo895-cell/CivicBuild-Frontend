@@ -101,6 +101,8 @@ export type ProfileStackParamList = {
   ProfileMain: undefined;
   EditProfile: undefined;
   MyReviews: undefined;
+  OrderHistory: undefined;
+  CustomerOrderDetail: { orderId: string };
   HelpSupport: undefined;
 };
 
@@ -382,6 +384,22 @@ export type EditProfileScreenProps = CompositeScreenProps<
 
 export type MyReviewsScreenProps = CompositeScreenProps<
   NativeStackScreenProps<ProfileStackParamList, 'MyReviews'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Profile'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type OrderHistoryScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<ProfileStackParamList, 'OrderHistory'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Profile'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type CustomerOrderDetailScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<ProfileStackParamList, 'CustomerOrderDetail'>,
   CompositeScreenProps<
     BottomTabScreenProps<MainTabParamList, 'Profile'>,
     NativeStackScreenProps<RootStackParamList>

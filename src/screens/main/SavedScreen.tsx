@@ -16,13 +16,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SavedScreenProps } from '@appTypes/navigation';
 import type { SavedItemDetail } from '@appTypes/saved';
 import { CategoryChipList, ScrollToTopButton } from '@components/dashboard';
-import { MARKETPLACE_CATEGORIES } from '@constants/marketplaceData';
+import { useMarketplaceCategories } from '@hooks/useMarketplaceCategories';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 import { resolveSavedItemDetailAsync } from '@utils/roleLabels';
 
 export default function SavedScreen(_props: SavedScreenProps) {
   const listRef = useRef<FlatList<SavedItemDetail>>(null);
+  const { categories } = useMarketplaceCategories();
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [resolvedDetails, setResolvedDetails] = useState<SavedItemDetail[]>([]);
   const [isResolving, setIsResolving] = useState(false);
@@ -86,7 +87,7 @@ export default function SavedScreen(_props: SavedScreenProps) {
       </Text>
 
       <CategoryChipList
-        categories={MARKETPLACE_CATEGORIES}
+        categories={categories}
         selectedId={selectedCategoryId}
         onSelect={setSelectedCategoryId}
       />

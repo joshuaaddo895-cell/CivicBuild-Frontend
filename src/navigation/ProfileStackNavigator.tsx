@@ -2,9 +2,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 
 import type { ProfileStackParamList } from '@appTypes/navigation';
+import CustomerOrderDetailScreen from '@screens/main/CustomerOrderDetailScreen';
 import EditProfileScreen from '@screens/main/EditProfileScreen';
 import HelpSupportScreen from '@screens/main/HelpSupportScreen';
 import MyReviewsScreen from '@screens/main/MyReviewsScreen';
+import OrderHistoryScreen from '@screens/main/OrderHistoryScreen';
 import ProfileScreen from '@screens/main/ProfileScreen';
 import theme from '@theme/index';
 
@@ -22,6 +24,8 @@ export default function ProfileStackNavigator() {
       <Stack.Screen name="ProfileMain" component={ProfileScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="MyReviews" component={MyReviewsScreen} />
+      <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+      <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
     </Stack.Navigator>
   );

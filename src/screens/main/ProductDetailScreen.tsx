@@ -1,21 +1,33 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getProduct, getSupplier } from '@api/catalog';
 import { getReviewSummary } from '@api/reviews';
+import type { Product, Supplier } from '@appTypes/marketplace';
 import type { ProductDetailScreenProps } from '@appTypes/navigation';
 import type { ReviewSummary } from '@appTypes/reviewsApi';
 import { AuthPrimaryButton } from '@components/auth';
 import ResendSuccessToast from '@components/auth/ResendSuccessToast';
+import WriteReviewForm from '@components/reviews/WriteReviewForm';
 import { getCategoryTheme } from '@constants/categoryTheme';
+import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 import { formatPriceWithUnit, formatUnitSuffix } from '@utils/paystackAmount';
 import { enrichProduct, usesNumericQuantityInput } from '@utils/productEnrichment';
-import { findProductById, resolveSupplierForProduct } from '@utils/productHelpers';
 
 function FloatingIconButton({
   icon,
@@ -109,8 +121,12 @@ function QuantityStepper({
 
 export default function ProductDetailScreen({ navigation, route }: ProductDetailScreenProps) {
   const { productId } = route.params;
-  const rawProduct = findProductById(productId);
-  const product = useMemo(() => (rawProduct ? enrichProduct(rawProduct) : undefined), [rawProduct]);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  const [product, setProduct] = useState<Product | undefined>();
+  const [supplier, setSupplier] = useState<Supplier | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const addProduct = useCartStore((state) => state.addProduct);
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
@@ -121,21 +137,53 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
   const [toastVisible, setToastVisible] = useState(false);
 
   const categoryTheme = product ? getCategoryTheme(product.category) : null;
-  const supplier = product ? resolveSupplierForProduct(product) : undefined;
   const [productReviewSummary, setProductReviewSummary] = useState<ReviewSummary>({
     averageRating: 0,
     totalCount: 0,
     breakdown: [],
   });
 
-  useEffect(() => {
-    void (async () => {
-      const result = await getReviewSummary('product', productId);
-      if (result.ok) {
-        setProductReviewSummary(result.data);
-      }
-    })();
+  const loadProduct = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
+
+    const result = await getProduct(productId);
+
+    if (!result.ok) {
+      setProduct(undefined);
+      setSupplier(undefined);
+      setLoadError(result.error.message);
+      setIsLoading(false);
+      return;
+    }
+
+    const loadedProduct = enrichProduct(result.data);
+    setProduct(loadedProduct);
+
+    if (loadedProduct.supplierId) {
+      const supplierResult = await getSupplier(loadedProduct.supplierId);
+      setSupplier(supplierResult.ok ? supplierResult.data : undefined);
+    } else {
+      setSupplier(undefined);
+    }
+
+    setIsLoading(false);
   }, [productId]);
+
+  useEffect(() => {
+    void loadProduct();
+  }, [loadProduct]);
+
+  const refreshReviewSummary = useCallback(async () => {
+    const result = await getReviewSummary('product', productId);
+    if (result.ok) {
+      setProductReviewSummary(result.data);
+    }
+  }, [productId]);
+
+  useEffect(() => {
+    void refreshReviewSummary();
+  }, [refreshReviewSummary]);
   const unitSuffix = product ? formatUnitSuffix(product.unit) : null;
   const useNumericInput = product ? usesNumericQuantityInput(product.unit) : false;
   const inStock = product?.inStock ?? product?.in_stock ?? true;
@@ -159,19 +207,8 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
   }, [product]);
 
   const handleMessageSupplier = useCallback(() => {
-    if (!product) {
-      navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
-      return;
-    }
-
-    const supplier = resolveSupplierForProduct(product);
-    if (supplier) {
-      navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
-      return;
-    }
-
     navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
-  }, [navigation, product]);
+  }, [navigation]);
 
   const handleOpenProductReviews = useCallback(() => {
     if (!product) {
@@ -215,6 +252,16 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
     setToastVisible(true);
   }, [addProduct, parsedQuantity, product]);
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!product || !categoryTheme) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -222,8 +269,13 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
           <MaterialIcons name="inventory-2" size={48} color={theme.colors.outline} />
           <Text style={styles.notFoundTitle}>Product not found</Text>
           <Text style={styles.notFoundSubtitle}>
-            This listing may have been removed or is no longer available.
+            {loadError || 'This listing may have been removed or is no longer available.'}
           </Text>
+          <AuthPrimaryButton
+            label="Try again"
+            showArrow={false}
+            onPress={() => void loadProduct()}
+          />
           <AuthPrimaryButton
             label="Go Back"
             showArrow={false}
@@ -423,6 +475,18 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
               <Text style={styles.messageButtonText}>Message Supplier</Text>
             </Pressable>
           </View>
+
+          {isAuthenticated ? (
+            <View style={styles.section}>
+              <WriteReviewForm
+                subjectType="product"
+                subjectId={productId}
+                subjectName={product.name}
+                verifiedPurchase
+                onSubmitted={() => void refreshReviewSummary()}
+              />
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -896,5 +960,10 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.bodyMd,
     color: theme.colors.onSurfaceVariant,
     textAlign: 'center',
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

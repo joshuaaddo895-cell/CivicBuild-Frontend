@@ -81,6 +81,11 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       onPress: () => navigation.navigate('EditProfile'),
     },
     {
+      icon: 'receipt-long' as const,
+      label: 'Order History',
+      onPress: () => navigation.navigate('OrderHistory'),
+    },
+    {
       icon: 'star-outline' as const,
       label: 'My Reviews / Ratings',
       subtitle: isLoadingReviews

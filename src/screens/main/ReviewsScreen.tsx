@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +8,8 @@ import type { ReviewsScreenProps } from '@appTypes/navigation';
 import type { Review, ReviewSummary } from '@appTypes/reviewsApi';
 import RatingBreakdownChart from '@components/reviews/RatingBreakdownChart';
 import ReviewCard from '@components/reviews/ReviewCard';
+import WriteReviewForm from '@components/reviews/WriteReviewForm';
+import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 
 function HeaderStars({ rating }: { rating: number }) {
@@ -30,38 +32,41 @@ function HeaderStars({ rating }: { rating: number }) {
 
 export default function ReviewsScreen({ navigation, route }: ReviewsScreenProps) {
   const { subjectType, subjectId, subjectName } = route.params;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [summary, setSummary] = useState<ReviewSummary | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
+  const loadReviews = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-      const [summaryResult, reviewsResult] = await Promise.all([
-        getReviewSummary(subjectType, subjectId),
-        getReviews(subjectType, subjectId),
-      ]);
+    const [summaryResult, reviewsResult] = await Promise.all([
+      getReviewSummary(subjectType, subjectId),
+      getReviews(subjectType, subjectId),
+    ]);
 
-      if (!summaryResult.ok) {
-        setSummary(null);
-        setReviews([]);
-        setError(summaryResult.error.message);
-        setIsLoading(false);
-        return;
-      }
-
-      setSummary(summaryResult.data);
-      setReviews(reviewsResult.ok ? reviewsResult.data : []);
-      if (!reviewsResult.ok) {
-        setError(reviewsResult.error.message);
-      }
-
+    if (!summaryResult.ok) {
+      setSummary(null);
+      setReviews([]);
+      setError(summaryResult.error.message);
       setIsLoading(false);
-    })();
+      return;
+    }
+
+    setSummary(summaryResult.data);
+    setReviews(reviewsResult.ok ? reviewsResult.data : []);
+    if (!reviewsResult.ok) {
+      setError(reviewsResult.error.message);
+    }
+
+    setIsLoading(false);
   }, [subjectId, subjectType]);
+
+  useEffect(() => {
+    void loadReviews();
+  }, [loadReviews]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -94,6 +99,15 @@ export default function ReviewsScreen({ navigation, route }: ReviewsScreenProps)
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.subjectName}>{subjectName}</Text>
+
+          {isAuthenticated ? (
+            <WriteReviewForm
+              subjectType={subjectType}
+              subjectId={subjectId}
+              subjectName={subjectName}
+              onSubmitted={() => void loadReviews()}
+            />
+          ) : null}
 
           <View style={styles.summaryCard}>
             <Text style={styles.averageRating}>{summary.averageRating.toFixed(1)}</Text>

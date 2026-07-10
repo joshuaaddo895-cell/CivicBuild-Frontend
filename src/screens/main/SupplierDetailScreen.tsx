@@ -1,80 +1,72 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getSupplier } from '@api/catalog';
-import type { Supplier } from '@appTypes/marketplace';
+import { getProducts, getSupplier } from '@api/catalog';
+import type { Product, Supplier } from '@appTypes/marketplace';
 import type { SupplierDetailScreenProps } from '@appTypes/navigation';
 import { AuthPrimaryButton } from '@components/auth';
 import { ProductGrid } from '@components/dashboard';
-import { getSupplierCategoryLabel, getSupplierProfile } from '@constants/supplierProfiles';
+import { useMarketplaceCategories } from '@hooks/useMarketplaceCategories';
 import { useCartStore } from '@store/cartStore';
-import { useProductStore } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
-import { findProductsBySupplier } from '@utils/productHelpers';
-
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: keyof typeof MaterialIcons.glyphMap;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.infoRow}>
-      <View style={styles.infoIconWrap}>
-        <MaterialIcons name={icon} size={18} color={theme.colors.primary} />
-      </View>
-      <View style={styles.infoTextBlock}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    </View>
-  );
-}
 
 export default function SupplierDetailScreen({ navigation, route }: SupplierDetailScreenProps) {
   const { supplierId } = route.params;
+  const { categories } = useMarketplaceCategories();
+
   const [supplier, setSupplier] = useState<Supplier | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchCatalog = useProductStore((state) => state.fetchCatalog);
-  const catalogProducts = useProductStore((state) => state.catalogProducts);
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
   const addProduct = useCartStore((state) => state.addProduct);
 
-  useEffect(() => {
-    void fetchCatalog();
-  }, [fetchCatalog]);
+  const loadSupplier = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
 
-  useEffect(() => {
-    void (async () => {
-      setIsLoading(true);
-      setError('');
-      const result = await getSupplier(supplierId);
-      if (result.ok) {
-        setSupplier(result.data);
-      } else {
-        setError(result.error.message);
-        setSupplier(null);
-      }
+    const [supplierResult, productsResult] = await Promise.all([
+      getSupplier(supplierId),
+      getProducts({ supplierId, limit: 20 }),
+    ]);
+
+    if (!supplierResult.ok) {
+      setSupplier(null);
+      setProducts([]);
+      setError(supplierResult.error.message);
       setIsLoading(false);
-    })();
+      return;
+    }
+
+    setSupplier(supplierResult.data);
+    setProducts(productsResult.ok ? productsResult.data.items : []);
+    setIsLoading(false);
   }, [supplierId]);
 
-  const profile = useMemo(() => (supplier ? getSupplierProfile(supplier) : null), [supplier]);
-  const categoryLabel = supplier ? getSupplierCategoryLabel(supplier) : '';
-  const products = useMemo(
-    () => (supplier ? findProductsBySupplier(supplier) : []),
-    [supplier, catalogProducts],
-  );
+  useEffect(() => {
+    void loadSupplier();
+  }, [loadSupplier]);
+
+  const categoryLabel = useMemo(() => {
+    if (!supplier) {
+      return 'Materials';
+    }
+
+    return categories.find((category) => category.id === supplier.categoryId)?.label ?? 'Materials';
+  }, [categories, supplier]);
+
+  const tagline = supplier ? `Trusted ${categoryLabel.toLowerCase()} supplier on CivicBuild` : '';
+  const description = supplier
+    ? supplier.verified
+      ? `${supplier.name} is a verified supplier on CivicBuild. Browse their listed products or message them for quotes and delivery coordination.`
+      : `${supplier.name} lists ${categoryLabel.toLowerCase()} on CivicBuild. Message them for availability, pricing, and delivery options.`
+    : '';
 
   if (isLoading) {
     return (
@@ -86,7 +78,7 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
     );
   }
 
-  if (error || !supplier || !profile) {
+  if (error || !supplier) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -103,6 +95,12 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
         </View>
         <View style={styles.missingState}>
           <Text style={styles.missingTitle}>{error || 'Supplier not found'}</Text>
+          <Pressable
+            onPress={() => void loadSupplier()}
+            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.retryText}>Try again</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -175,7 +173,7 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
                 <MaterialIcons name="verified" size={20} color={theme.colors.primary} />
               ) : null}
             </View>
-            <Text style={styles.tagline}>{profile.tagline}</Text>
+            <Text style={styles.tagline}>{tagline}</Text>
 
             <Pressable
               onPress={handleReviewsPress}
@@ -201,20 +199,17 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
             <MaterialIcons name="category" size={16} color={theme.colors.primary} />
             <Text style={styles.statPillText}>{categoryLabel}</Text>
           </View>
-          {profile.yearEstablished ? (
-            <View style={styles.statPill}>
-              <MaterialIcons name="history" size={16} color={theme.colors.primary} />
-              <Text style={styles.statPillText}>Est. {profile.yearEstablished}</Text>
-            </View>
-          ) : null}
         </View>
 
         <Text style={styles.sectionTitle}>About the business</Text>
         <View style={styles.card}>
-          <Text style={styles.description}>{profile.description}</Text>
-          <InfoRow icon="location-on" label="Address" value={profile.address} />
-          <InfoRow icon="phone" label="Phone" value={profile.phone} />
-          <InfoRow icon="schedule" label="Hours" value={profile.hours} />
+          <Text style={styles.description}>{description}</Text>
+          <View style={styles.contactHint}>
+            <MaterialIcons name="chat" size={18} color={theme.colors.primary} />
+            <Text style={styles.contactHintText}>
+              Contact this supplier via Messages for quotes, stock checks, and delivery.
+            </Text>
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>Products from this supplier</Text>
@@ -373,35 +368,20 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.bodyMd,
     color: theme.colors.onSurfaceVariant,
   },
-  infoRow: {
+  contactHint: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
     alignItems: 'flex-start',
-  },
-  infoIconWrap: {
-    width: 36,
-    height: 36,
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
     borderRadius: theme.borderRadius.lg,
-    backgroundColor: `${theme.colors.primary}14`,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: theme.colors.primaryContainer,
   },
-  infoTextBlock: {
+  contactHintText: {
     flex: 1,
-    gap: 2,
-  },
-  infoLabel: {
-    fontFamily: theme.typography.fontFamily.label,
-    fontSize: theme.typography.fontSize.labelMd,
-    color: theme.colors.onSurfaceVariant,
-    textTransform: 'uppercase',
-    letterSpacing: theme.typography.letterSpacing.labelMd,
-  },
-  infoValue: {
     fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.fontSize.bodyMd,
-    lineHeight: theme.typography.lineHeight.bodyMd,
-    color: theme.colors.onSurface,
+    fontSize: theme.typography.fontSize.bodySm,
+    lineHeight: theme.typography.lineHeight.bodySm,
+    color: theme.colors.onPrimaryContainer,
   },
   emptyProducts: {
     padding: theme.spacing.lg,
@@ -429,6 +409,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   loadingState: {
     flex: 1,
@@ -439,5 +420,18 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.headline,
     fontSize: theme.typography.fontSize.headlineSm,
     color: theme.colors.onSurface,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    fontWeight: '600',
   },
 });

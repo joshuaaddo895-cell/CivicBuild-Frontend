@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { OrderConfirmationScreenProps } from '@appTypes/navigation';
@@ -13,6 +13,12 @@ export default function OrderConfirmationScreen({
   route,
 }: OrderConfirmationScreenProps) {
   const { orderNumber, amountPaid, deliveryAddress } = route.params;
+
+  const handleViewOrders = () => {
+    navigation.getParent()?.navigate('Profile', {
+      screen: 'OrderHistory',
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -40,11 +46,17 @@ export default function OrderConfirmationScreen({
           </View>
         </View>
 
-        <AuthPrimaryButton
-          label="Back to Home"
-          showArrow={false}
-          onPress={() => navigation.popToTop()}
-        />
+        <View style={styles.actions}>
+          <AuthPrimaryButton label="View my orders" showArrow={false} onPress={handleViewOrders} />
+          <Pressable
+            onPress={() => navigation.popToTop()}
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Back to home"
+          >
+            <Text style={styles.secondaryButtonText}>Back to Home</Text>
+          </Pressable>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -108,5 +120,27 @@ const styles = StyleSheet.create({
   addressValue: {
     fontWeight: '400',
     lineHeight: theme.typography.lineHeight.bodyMd,
+  },
+  actions: {
+    width: '100%',
+    gap: theme.spacing.sm,
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.outlineVariant,
+    backgroundColor: theme.colors.surface,
+  },
+  secondaryButtonText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.onSurface,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.75,
   },
 });
