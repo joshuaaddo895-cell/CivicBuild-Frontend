@@ -7,6 +7,7 @@ import type {
   PaginatedItems,
 } from '@appTypes/catalog';
 import type { Product, Supplier } from '@appTypes/marketplace';
+import { resolveProductImageUri, resolveSupplierLogoUri } from '@constants/placeholderImages';
 import { formatGhCedisPrice } from '@utils/paystackAmount';
 import { enrichProduct } from '@utils/productEnrichment';
 
@@ -19,16 +20,17 @@ function unwrapPaginated<T>(response: ApiResponse<PaginatedItems<T>>): Paginated
 }
 
 export function mapBackendProduct(product: BackendProduct): Product {
+  const imageUri = resolveProductImageUri(product.imageUrl);
   return enrichProduct({
     id: product.id,
     category: product.category,
     name: product.name,
     price: product.price,
     priceLabel: formatGhCedisPrice(product.price),
-    imageUri: product.imageUrl,
+    imageUri,
     imageAlt: product.name,
-    imageUrl: product.imageUrl,
-    image_url: product.imageUrl,
+    imageUrl: imageUri,
+    image_url: imageUri,
     unit: product.unit,
     description: product.description,
     supplierId: product.supplierId,
@@ -43,10 +45,11 @@ export function mapBackendProduct(product: BackendProduct): Product {
 }
 
 export function mapBackendSupplier(supplier: BackendSupplier): Supplier {
+  const logoUri = resolveSupplierLogoUri(supplier.logoUrl);
   return {
     id: supplier.id,
     name: supplier.name,
-    logoUri: supplier.logoUrl,
+    logoUri,
     rating: supplier.rating,
     reviewCount: supplier.reviewCount,
     distanceKm: supplier.distanceKm,

@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -36,7 +36,11 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
   const [isStartingThread, setIsStartingThread] = useState(false);
 
   const fetchCatalog = useProductStore((state) => state.fetchCatalog);
-  const products = useProductStore((state) => state.getProductsByAgencyId(agencyId));
+  const catalogProducts = useProductStore((state) => state.catalogProducts);
+  const products = useMemo(
+    () => catalogProducts.filter((product) => product.agencyId === agencyId),
+    [agencyId, catalogProducts],
+  );
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
   const addProduct = useCartStore((state) => state.addProduct);

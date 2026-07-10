@@ -10,9 +10,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getAgency } from '@api/agencies';
+import { listAgencies } from '@api/agencies';
 import { getSuppliers } from '@api/catalog';
-import type { Supplier } from '@appTypes/marketplace';
+import type { MarketplaceListing } from '@appTypes/marketplace';
 import type { HomeMainScreenProps } from '@appTypes/navigation';
 import {
   CategoryChipList,
@@ -30,6 +30,7 @@ import { useCartStore } from '@store/cartStore';
 import { useProductStore } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
+import { isAgencyListing, mergeMarketplaceListings } from '@utils/marketplaceDirectory';
 import { getUserInitials } from '@utils/userInitials';
 
 export default function HomeScreen({ navigation }: HomeMainScreenProps) {
@@ -40,7 +41,7 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [listings, setListings] = useState<MarketplaceListing[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
 
@@ -69,15 +70,21 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
     setIsLoadingSuppliers(true);
     setSuppliersError(null);
 
-    const result = await getSuppliers({ limit: 10 });
+    const [suppliersResult, agenciesResult] = await Promise.all([
+      getSuppliers({ limit: 10 }),
+      listAgencies(undefined, 0, 10),
+    ]);
 
-    if (result.ok) {
-      setSuppliers(result.data.items);
-    } else {
-      setSuppliers([]);
-      setSuppliersError(result.error.message);
+    if (!suppliersResult.ok && !agenciesResult.ok) {
+      setListings([]);
+      setSuppliersError(suppliersResult.error.message || agenciesResult.error.message);
+      setIsLoadingSuppliers(false);
+      return;
     }
 
+    const suppliers = suppliersResult.ok ? suppliersResult.data.items : [];
+    const agencies = agenciesResult.ok ? agenciesResult.data.items : [];
+    setListings(mergeMarketplaceListings(suppliers, agencies));
     setIsLoadingSuppliers(false);
   }, []);
 
@@ -103,15 +110,13 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
     );
   }, [marketplaceProducts, searchQuery, selectedCategoryId]);
 
-  const handleSupplierPress = async (supplierId: string) => {
-    const agencyResult = await getAgency(supplierId);
-
-    if (agencyResult.ok) {
-      navigation.navigate('AgencyDetail', { agencyId: supplierId });
+  const handleListingPress = (listing: MarketplaceListing) => {
+    if (isAgencyListing(listing)) {
+      navigation.navigate('AgencyDetail', { agencyId: listing.id });
       return;
     }
 
-    navigation.navigate('SupplierDetail', { supplierId });
+    navigation.navigate('SupplierDetail', { supplierId: listing.id });
   };
 
   const handleAddProduct = (productId: string) => {
@@ -153,7 +158,7 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
 
         <View style={styles.section}>
           <SectionHeader
-            title="Trusted Suppliers Near You"
+            title="Suppliers & Agencies Near You"
             actionLabel="See All"
             onActionPress={() => navigation.navigate('AllSuppliers')}
           />
@@ -163,14 +168,22 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
             </View>
           ) : suppliersError ? (
             <Text style={styles.errorText}>{suppliersError}</Text>
-          ) : suppliers.length === 0 ? (
-            <Text style={styles.emptyText}>No suppliers available yet.</Text>
+          ) : listings.length === 0 ? (
+            <Text style={styles.emptyText}>No suppliers or agencies available yet.</Text>
           ) : (
             <SupplierCardList
-              suppliers={suppliers}
-              isFavorite={(id) => isSaved(id, 'supplier')}
-              onFavoritePress={(id) => void toggleSaved(id, 'supplier')}
-              onSupplierPress={(id) => void handleSupplierPress(id)}
+              suppliers={listings}
+              isFavorite={(id) => isSaved(id, 'supplier') || isSaved(id, 'agency')}
+              onFavoritePress={(id) => {
+                const listing = listings.find((entry) => entry.id === id);
+                void toggleSaved(id, listing && isAgencyListing(listing) ? 'agency' : 'supplier');
+              }}
+              onSupplierPress={(id) => {
+                const listing = listings.find((entry) => entry.id === id);
+                if (listing) {
+                  handleListingPress(listing);
+                }
+              }}
             />
           )}
         </View>

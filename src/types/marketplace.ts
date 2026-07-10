@@ -16,6 +16,13 @@ export interface Supplier {
   categoryId: string;
 }
 
+export type MarketplaceListingKind = 'supplier' | 'agency';
+
+export type MarketplaceListing = Supplier & {
+  listingKind: MarketplaceListingKind;
+  tagline?: string;
+};
+
 export interface Product {
   id: string;
   category: string;

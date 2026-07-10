@@ -16,7 +16,8 @@ export interface BackendChatMessage {
 }
 
 export interface StartThreadRequest {
-  agencyId: string;
+  agencyId?: string;
+  supplierId?: string;
 }
 
 export interface SendMessageRequest {

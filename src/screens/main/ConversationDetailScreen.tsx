@@ -1,13 +1,14 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -26,11 +27,22 @@ import type { ChatMessage } from '@appTypes/messages';
 import type { ConversationDetailScreenProps } from '@appTypes/navigation';
 import theme from '@theme/index';
 
+const CONVERSATION_POLL_MS = 5000;
+
 export default function ConversationDetailScreen({
   navigation,
   route,
 }: ConversationDetailScreenProps) {
-  const { threadId: routeThreadId, agencyId, participantName, participantLogoUri } = route.params;
+  const {
+    threadId: routeThreadId,
+    agencyId,
+    supplierId,
+    participantName,
+    participantLogoUri,
+  } = route.params ?? {};
+
+  const threadIdRef = useRef<string | null>(routeThreadId ?? null);
+  const hasLoadedMessagesRef = useRef(false);
 
   const [activeThreadId, setActiveThreadId] = useState<string | null>(routeThreadId ?? null);
   const [displayName, setDisplayName] = useState(participantName ?? 'Conversation');
@@ -38,6 +50,7 @@ export default function ConversationDetailScreen({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,58 +59,101 @@ export default function ConversationDetailScreen({
     [messages],
   );
 
-  const loadConversation = useCallback(async () => {
-    setIsLoading(true);
+  const refreshMessages = useCallback(async (threadId: string, silent = true) => {
+    if (silent) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     setError(null);
 
-    let threadId = activeThreadId ?? routeThreadId ?? null;
+    const messagesResult = await getThreadMessages(threadId);
 
-    if (!threadId && agencyId) {
-      const startResult = await startThread({ agencyId });
-
-      if (!startResult.ok) {
-        setError(startResult.error.message);
-        setIsLoading(false);
-        return;
-      }
-
-      threadId = startResult.data.id;
-      setActiveThreadId(threadId);
-      setDisplayName(startResult.data.participantName);
-      setDisplayLogoUri(startResult.data.participantLogoUri);
-    }
-
-    if (!threadId) {
-      setError('Conversation not found.');
-      setIsLoading(false);
-      return;
-    }
-
-    const [messagesResult] = await Promise.all([
-      getThreadMessages(threadId),
-      markThreadRead(threadId),
-    ]);
-
-    if (!messagesResult.ok) {
+    if (messagesResult.ok) {
+      setMessages(messagesResult.data);
+      hasLoadedMessagesRef.current = true;
+      void markThreadRead(threadId);
+    } else if (!silent || !hasLoadedMessagesRef.current) {
       setError(messagesResult.error.message);
       setMessages([]);
-      setIsLoading(false);
-      return;
     }
 
-    setMessages(messagesResult.data);
     setIsLoading(false);
-  }, [activeThreadId, agencyId, routeThreadId]);
+    setIsRefreshing(false);
+  }, []);
+
+  const resolveThreadId = useCallback(async (): Promise<string | null> => {
+    let threadId = threadIdRef.current ?? activeThreadId ?? routeThreadId ?? null;
+
+    if (threadId) {
+      return threadId;
+    }
+
+    if (!agencyId && !supplierId) {
+      return null;
+    }
+
+    const startResult = await startThread(agencyId ? { agencyId } : { supplierId: supplierId! });
+
+    if (!startResult.ok) {
+      setError(startResult.error.message);
+      return null;
+    }
+
+    threadId = startResult.data.id;
+    threadIdRef.current = threadId;
+    setActiveThreadId(threadId);
+    setDisplayName(startResult.data.participantName);
+    setDisplayLogoUri(startResult.data.participantLogoUri);
+
+    return threadId;
+  }, [activeThreadId, agencyId, routeThreadId, supplierId]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadConversation();
-    }, [loadConversation]),
+      let cancelled = false;
+      let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+      void (async () => {
+        const threadId = await resolveThreadId();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!threadId) {
+          setError((current) => current ?? 'Conversation not found.');
+          setIsLoading(false);
+          return;
+        }
+
+        threadIdRef.current = threadId;
+        await refreshMessages(threadId, hasLoadedMessagesRef.current);
+
+        if (cancelled) {
+          return;
+        }
+
+        pollTimer = setInterval(() => {
+          const currentThreadId = threadIdRef.current;
+          if (currentThreadId) {
+            void refreshMessages(currentThreadId, true);
+          }
+        }, CONVERSATION_POLL_MS);
+      })();
+
+      return () => {
+        cancelled = true;
+        if (pollTimer) {
+          clearInterval(pollTimer);
+        }
+      };
+    }, [refreshMessages, resolveThreadId]),
   );
 
   const handleSend = async () => {
     const text = draft.trim();
-    const threadId = activeThreadId ?? routeThreadId;
+    const threadId = threadIdRef.current ?? activeThreadId ?? routeThreadId;
 
     if (!text || !threadId || isSending) {
       return;
@@ -114,10 +170,23 @@ export default function ConversationDetailScreen({
       return;
     }
 
-    setMessages((current) => [...current, result.data]);
+    setMessages((current) => {
+      const exists = current.some((message) => message.id === result.data.id);
+      if (exists) {
+        return current;
+      }
+      return [...current, result.data];
+    });
     setDraft('');
     setIsSending(false);
   };
+
+  const handleManualRefresh = useCallback(() => {
+    const threadId = threadIdRef.current ?? activeThreadId ?? routeThreadId;
+    if (threadId) {
+      void refreshMessages(threadId, true);
+    }
+  }, [activeThreadId, refreshMessages, routeThreadId]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -152,12 +221,32 @@ export default function ConversationDetailScreen({
       ) : error && sortedMessages.length === 0 ? (
         <View style={styles.centeredState}>
           <Text style={styles.errorText}>{error}</Text>
+          <Pressable
+            onPress={() => {
+              void (async () => {
+                const threadId = await resolveThreadId();
+                if (threadId) {
+                  await refreshMessages(threadId, false);
+                }
+              })();
+            }}
+            style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
           data={sortedMessages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleManualRefresh}
+              tintColor={theme.colors.primary}
+            />
+          }
           renderItem={({ item }) => (
             <View
               style={[
@@ -271,12 +360,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   errorText: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.error,
     textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  retryButtonPressed: {
+    opacity: 0.85,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    fontWeight: '600',
   },
   inlineError: {
     fontFamily: theme.typography.fontFamily.body,

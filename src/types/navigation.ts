@@ -91,6 +91,7 @@ export type MessagesStackParamList = {
   ConversationDetail: {
     threadId?: string;
     agencyId?: string;
+    supplierId?: string;
     participantName?: string;
     participantLogoUri?: string;
   };

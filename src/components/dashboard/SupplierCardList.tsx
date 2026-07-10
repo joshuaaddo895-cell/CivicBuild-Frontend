@@ -1,13 +1,13 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import type { Supplier } from '@appTypes/marketplace';
+import type { MarketplaceListing, Supplier } from '@appTypes/marketplace';
 import theme from '@theme/index';
 
 import SupplierCard from './SupplierCard';
 
 interface SupplierCardListProps {
-  suppliers: Supplier[];
+  suppliers: (Supplier | MarketplaceListing)[];
   isFavorite?: (supplierId: string) => boolean;
   onFavoritePress?: (supplierId: string) => void;
   onSupplierPress?: (supplierId: string) => void;
@@ -28,7 +28,7 @@ export default function SupplierCardList({
       >
         {suppliers.map((supplier) => (
           <SupplierCard
-            key={supplier.id}
+            key={`${'listingKind' in supplier ? supplier.listingKind : 'supplier'}-${supplier.id}`}
             supplier={supplier}
             isFavorite={isFavorite?.(supplier.id) ?? false}
             onFavoritePress={onFavoritePress ? () => onFavoritePress(supplier.id) : undefined}

@@ -4,6 +4,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Product } from '@appTypes/marketplace';
+import { resolveProductImageUri } from '@constants/placeholderImages';
 import theme from '@theme/index';
 import { formatCedis, formatUnitSuffix } from '@utils/paystackAmount';
 
@@ -23,6 +24,7 @@ export default function ProductCard({
   onFavoritePress,
 }: ProductCardProps) {
   const unitSuffix = formatUnitSuffix(product.unit);
+  const imageUri = resolveProductImageUri(product.imageUri);
 
   return (
     <Pressable
@@ -33,7 +35,7 @@ export default function ProductCard({
     >
       <View style={styles.imageWrapper}>
         <Image
-          source={{ uri: product.imageUri }}
+          source={{ uri: imageUri }}
           style={styles.image}
           contentFit="cover"
           accessibilityLabel={product.imageAlt}

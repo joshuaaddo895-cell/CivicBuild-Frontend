@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getProduct, getSupplier } from '@api/catalog';
+import { startThread } from '@api/messages';
 import { getReviewSummary } from '@api/reviews';
 import type { Product, Supplier } from '@appTypes/marketplace';
 import type { ProductDetailScreenProps } from '@appTypes/navigation';
@@ -127,6 +128,8 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
   const [supplier, setSupplier] = useState<Supplier | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [isStartingMessage, setIsStartingMessage] = useState(false);
+  const [messageError, setMessageError] = useState('');
 
   const addProduct = useCartStore((state) => state.addProduct);
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
@@ -206,9 +209,36 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
     }
   }, [product]);
 
-  const handleMessageSupplier = useCallback(() => {
-    navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
-  }, [navigation]);
+  const handleMessageSupplier = useCallback(async () => {
+    if (!supplier || isStartingMessage) {
+      if (!supplier) {
+        navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
+      }
+      return;
+    }
+
+    setMessageError('');
+    setIsStartingMessage(true);
+
+    const result = await startThread({ supplierId: supplier.id });
+
+    setIsStartingMessage(false);
+
+    if (!result.ok) {
+      setMessageError(result.error.message);
+      return;
+    }
+
+    navigation.getParent()?.navigate('Messages', {
+      screen: 'ConversationDetail',
+      params: {
+        threadId: result.data.id,
+        supplierId: supplier.id,
+        participantName: result.data.participantName,
+        participantLogoUri: result.data.participantLogoUri,
+      },
+    });
+  }, [isStartingMessage, navigation, supplier]);
 
   const handleOpenProductReviews = useCallback(() => {
     if (!product) {
@@ -466,14 +496,17 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
               </View>
             </View>
             <Pressable
-              onPress={handleMessageSupplier}
+              onPress={() => void handleMessageSupplier()}
               style={({ pressed }) => [styles.messageButton, pressed && styles.pressed]}
               accessibilityRole="button"
               accessibilityLabel={`Message ${product.supplierName ?? 'supplier'}`}
             >
               <MaterialIcons name="chat" size={18} color={theme.colors.primary} />
-              <Text style={styles.messageButtonText}>Message Supplier</Text>
+              <Text style={styles.messageButtonText}>
+                {isStartingMessage ? 'Opening chat...' : 'Message Supplier'}
+              </Text>
             </Pressable>
+            {messageError ? <Text style={styles.messageError}>{messageError}</Text> : null}
           </View>
 
           {isAuthenticated ? (
@@ -833,6 +866,12 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.labelMd,
     color: theme.colors.primary,
     fontWeight: '600',
+  },
+  messageError: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.error,
+    textAlign: 'center',
   },
   toastContainer: {
     position: 'absolute',

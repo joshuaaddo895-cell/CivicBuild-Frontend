@@ -1,7 +1,16 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { formatMessageTimestamp, getThreads } from '@api/messages';
@@ -12,27 +21,37 @@ import theme from '@theme/index';
 export default function MessagesScreen({ navigation }: MessagesListScreenProps) {
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
 
-  const loadThreads = useCallback(async () => {
-    setIsLoading(true);
+  const loadThreads = useCallback(async (silent = false) => {
+    if (silent) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     setError(null);
 
     const result = await getThreads();
 
     if (result.ok) {
       setThreads(result.data);
-    } else {
+      hasLoadedRef.current = true;
+    } else if (!silent || !hasLoadedRef.current) {
       setThreads([]);
       setError(result.error.message);
     }
 
     setIsLoading(false);
+    setIsRefreshing(false);
   }, []);
 
-  useEffect(() => {
-    void loadThreads();
-  }, [loadThreads]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadThreads(hasLoadedRef.current);
+    }, [loadThreads]),
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -44,11 +63,17 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
         <View style={styles.centeredState}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
-      ) : error ? (
+      ) : error && threads.length === 0 ? (
         <View style={styles.emptyState}>
           <MaterialIcons name="error-outline" size={48} color={theme.colors.error} />
           <Text style={styles.emptyTitle}>Could not load messages</Text>
           <Text style={styles.emptySubtitle}>{error}</Text>
+          <Pressable
+            onPress={() => void loadThreads(false)}
+            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
       ) : threads.length === 0 ? (
         <View style={styles.emptyState}>
@@ -63,6 +88,13 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
           data={threads}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void loadThreads(true)}
+              tintColor={theme.colors.primary}
+            />
+          }
           renderItem={({ item }) => {
             const hasUnread = item.unreadCount > 0;
 
@@ -165,6 +197,22 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.onSurfaceVariant,
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.75,
   },
   listContent: {
     paddingBottom: theme.spacing.stackLg,

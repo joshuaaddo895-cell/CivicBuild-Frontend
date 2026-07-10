@@ -5,10 +5,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getProducts, getSupplier } from '@api/catalog';
+import { startThread } from '@api/messages';
 import type { Product, Supplier } from '@appTypes/marketplace';
 import type { SupplierDetailScreenProps } from '@appTypes/navigation';
 import { AuthPrimaryButton } from '@components/auth';
 import { ProductGrid } from '@components/dashboard';
+import { resolveSupplierLogoUri } from '@constants/placeholderImages';
 import { useMarketplaceCategories } from '@hooks/useMarketplaceCategories';
 import { useCartStore } from '@store/cartStore';
 import { useSavedStore } from '@store/savedStore';
@@ -22,6 +24,8 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isStartingThread, setIsStartingThread] = useState(false);
+  const [messageError, setMessageError] = useState('');
 
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
@@ -106,8 +110,32 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
     );
   }
 
-  const handleMessagePress = () => {
-    navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
+  const handleMessagePress = async () => {
+    if (!supplier || isStartingThread) {
+      return;
+    }
+
+    setMessageError('');
+    setIsStartingThread(true);
+
+    const result = await startThread({ supplierId: supplier.id });
+
+    setIsStartingThread(false);
+
+    if (!result.ok) {
+      setMessageError(result.error.message);
+      return;
+    }
+
+    navigation.getParent()?.navigate('Messages', {
+      screen: 'ConversationDetail',
+      params: {
+        threadId: result.data.id,
+        supplierId: supplier.id,
+        participantName: result.data.participantName,
+        participantLogoUri: result.data.participantLogoUri,
+      },
+    });
   };
 
   const handleReviewsPress = () => {
@@ -160,7 +188,7 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.heroCard}>
           <Image
-            source={{ uri: supplier.logoUri }}
+            source={{ uri: resolveSupplierLogoUri(supplier.logoUri) }}
             style={styles.logo}
             contentFit="cover"
             accessibilityLabel={`${supplier.name} logo`}
@@ -231,7 +259,13 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
       </ScrollView>
 
       <View style={styles.footer}>
-        <AuthPrimaryButton label="Message Us" showArrow={false} onPress={handleMessagePress} />
+        {messageError ? <Text style={styles.messageError}>{messageError}</Text> : null}
+        <AuthPrimaryButton
+          label="Message Us"
+          showArrow={false}
+          loading={isStartingThread}
+          onPress={handleMessagePress}
+        />
       </View>
     </SafeAreaView>
   );
@@ -403,6 +437,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: theme.colors.outlineVariant,
     backgroundColor: theme.colors.surface,
+    gap: theme.spacing.sm,
+  },
+  messageError: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.error,
+    textAlign: 'center',
   },
   missingState: {
     flex: 1,

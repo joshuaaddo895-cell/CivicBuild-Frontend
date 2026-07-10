@@ -3,11 +3,11 @@ import { Image } from 'expo-image';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { Supplier } from '@appTypes/marketplace';
+import type { MarketplaceListing, Supplier } from '@appTypes/marketplace';
 import theme from '@theme/index';
 
 interface SupplierCardProps {
-  supplier: Supplier;
+  supplier: Supplier | MarketplaceListing;
   layout?: 'carousel' | 'list';
   isFavorite?: boolean;
   onPress?: () => void;
@@ -21,6 +21,10 @@ export default function SupplierCard({
   onPress,
   onFavoritePress,
 }: SupplierCardProps) {
+  const listingKind = 'listingKind' in supplier ? supplier.listingKind : 'supplier';
+  const tagline = 'tagline' in supplier ? supplier.tagline : undefined;
+  const isAgency = listingKind === 'agency';
+
   return (
     <Pressable
       onPress={onPress}
@@ -33,12 +37,26 @@ export default function SupplierCard({
       accessibilityLabel={`${supplier.name}, rated ${supplier.rating}, ${supplier.distanceKm} kilometers away`}
     >
       <View style={styles.logoWrapper}>
-        <Image
-          source={{ uri: supplier.logoUri }}
-          style={styles.logo}
-          contentFit="cover"
-          accessibilityLabel={`${supplier.name} logo`}
-        />
+        {supplier.logoUri ? (
+          <Image
+            source={{ uri: supplier.logoUri }}
+            style={styles.logo}
+            contentFit="cover"
+            accessibilityLabel={`${supplier.name} logo`}
+          />
+        ) : (
+          <View style={styles.logoPlaceholder}>
+            <MaterialIcons
+              name={
+                'listingKind' in supplier && supplier.listingKind === 'agency'
+                  ? 'business'
+                  : 'store'
+              }
+              size={24}
+              color={theme.colors.primary}
+            />
+          </View>
+        )}
         {onFavoritePress ? (
           <Pressable
             onPress={onFavoritePress}
@@ -68,12 +86,33 @@ export default function SupplierCard({
           ) : null}
         </View>
         <View style={styles.ratingRow}>
-          <MaterialIcons name="star" size={14} color={theme.colors.onSurfaceVariant} />
-          <Text style={styles.rating}>
-            {supplier.rating.toFixed(1)} ({supplier.reviewCount} reviews)
-          </Text>
+          {isAgency ? (
+            <>
+              <MaterialIcons name="chat" size={14} color={theme.colors.primary} />
+              <Text style={styles.agencyHint}>Construction agency · Message Us</Text>
+            </>
+          ) : (
+            <>
+              <MaterialIcons name="chat" size={14} color={theme.colors.primary} />
+              <Text style={styles.agencyHint}>Material supplier · Message Us</Text>
+            </>
+          )}
         </View>
-        <Text style={styles.distance}>{supplier.distanceKm.toFixed(1)} km away</Text>
+        {isAgency && tagline ? (
+          <Text style={styles.tagline} numberOfLines={1}>
+            {tagline}
+          </Text>
+        ) : !isAgency ? (
+          <>
+            <View style={styles.supplierMetaRow}>
+              <MaterialIcons name="star" size={14} color={theme.colors.onSurfaceVariant} />
+              <Text style={styles.rating}>
+                {supplier.rating.toFixed(1)} ({supplier.reviewCount} reviews)
+              </Text>
+            </View>
+            <Text style={styles.distance}>{supplier.distanceKm.toFixed(1)} km away</Text>
+          </>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -130,6 +169,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  logoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primaryContainer,
+  },
   content: {
     flex: 1,
     gap: 2,
@@ -159,11 +205,32 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.labelMd,
     color: theme.colors.onSurfaceVariant,
   },
+  supplierMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   distance: {
     fontFamily: theme.typography.fontFamily.label,
     fontSize: theme.typography.fontSize.labelMd,
     lineHeight: theme.typography.lineHeight.labelMd,
     color: theme.colors.onSecondaryContainer,
+    marginTop: 2,
+  },
+  agencyHint: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    lineHeight: theme.typography.lineHeight.labelMd,
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  tagline: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    lineHeight: theme.typography.lineHeight.bodySm,
+    color: theme.colors.onSurfaceVariant,
     marginTop: 2,
   },
 });

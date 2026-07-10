@@ -41,6 +41,17 @@ export async function getThreads(): Promise<ApiResult<MessageThread[]>> {
 }
 
 export async function startThread(input: StartThreadRequest): Promise<ApiResult<MessageThread>> {
+  if (!input.agencyId && !input.supplierId) {
+    return {
+      ok: false,
+      error: {
+        message: 'Choose an agency or supplier to start a conversation.',
+        statusCode: 400,
+        code: 'VALIDATION',
+      },
+    };
+  }
+
   return toApiResult(
     apiClient
       .post<ApiResponse<BackendMessageThread>>('/api/messages/threads', input)
