@@ -1,33 +1,109 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getAgency } from '@api/agencies';
+import { getSuppliers } from '@api/catalog';
+import type { Supplier } from '@appTypes/marketplace';
 import type { AllSuppliersScreenProps } from '@appTypes/navigation';
 import { DashboardSearchBar } from '@components/dashboard';
 import SupplierCard from '@components/dashboard/SupplierCard';
-import { isConstructionAgencyId } from '@constants/agencyProfiles';
-import { filterSuppliersBySearch, TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 
+const PAGE_SIZE = 20;
+
 export default function AllSuppliersScreen({ navigation }: AllSuppliersScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
 
-  const filteredSuppliers = useMemo(
-    () => filterSuppliersBySearch(TRUSTED_SUPPLIERS, searchQuery),
-    [searchQuery],
-  );
+  const fetchSuppliers = useCallback(async (nextPage: number, query: string, append: boolean) => {
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+      setError(null);
+    }
 
-  const handleSupplierPress = (supplierId: string) => {
-    if (isConstructionAgencyId(supplierId)) {
+    const result = await getSuppliers({
+      q: query.trim() || undefined,
+      page: nextPage,
+      limit: PAGE_SIZE,
+    });
+
+    if (result.ok) {
+      setSuppliers((current) => (append ? [...current, ...result.data.items] : result.data.items));
+      setTotal(result.data.total);
+      setHasNextPage(result.data.hasNextPage);
+      setPage(nextPage);
+    } else if (!append) {
+      setSuppliers([]);
+      setError(result.error.message);
+    }
+
+    setIsLoading(false);
+    setIsLoadingMore(false);
+  }, []);
+
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    searchDebounceRef.current = setTimeout(() => {
+      void fetchSuppliers(0, searchQuery, false);
+    }, 300);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [fetchSuppliers, searchQuery]);
+
+  const handleSupplierPress = async (supplierId: string) => {
+    const agencyResult = await getAgency(supplierId);
+
+    if (agencyResult.ok) {
       navigation.navigate('AgencyDetail', { agencyId: supplierId });
       return;
     }
 
     navigation.navigate('SupplierDetail', { supplierId });
+  };
+
+  const handleLoadMore = () => {
+    if (!hasNextPage || isLoadingMore || isLoading) {
+      return;
+    }
+
+    void fetchSuppliers(page + 1, searchQuery, true);
+  };
+
+  const handleScroll = (event: {
+    nativeEvent: {
+      layoutMeasurement: { height: number };
+      contentOffset: { y: number };
+      contentSize: { height: number };
+    };
+  }) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+
+    if (distanceFromBottom < 120) {
+      handleLoadMore();
+    }
   };
 
   return (
@@ -49,10 +125,15 @@ export default function AllSuppliersScreen({ navigation }: AllSuppliersScreenPro
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
       >
         <Text style={styles.subtitle}>
-          {filteredSuppliers.length} trusted supplier{filteredSuppliers.length === 1 ? '' : 's'}{' '}
-          {searchQuery.trim() ? 'found' : 'near Accra'}
+          {isLoading
+            ? 'Loading suppliers...'
+            : `${total} trusted supplier${total === 1 ? '' : 's'} ${
+                searchQuery.trim() ? 'found' : 'near Accra'
+              }`}
         </Text>
 
         <DashboardSearchBar
@@ -61,7 +142,17 @@ export default function AllSuppliersScreen({ navigation }: AllSuppliersScreenPro
           placeholder="Search suppliers by name or category..."
         />
 
-        {filteredSuppliers.length === 0 ? (
+        {isLoading ? (
+          <View style={styles.centeredState}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : error ? (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="error-outline" size={40} color={theme.colors.error} />
+            <Text style={styles.emptyTitle}>Could not load suppliers</Text>
+            <Text style={styles.emptyBody}>{error}</Text>
+          </View>
+        ) : suppliers.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialIcons name="search-off" size={40} color={theme.colors.onSurfaceVariant} />
             <Text style={styles.emptyTitle}>No suppliers found</Text>
@@ -71,16 +162,21 @@ export default function AllSuppliersScreen({ navigation }: AllSuppliersScreenPro
           </View>
         ) : (
           <View style={styles.list}>
-            {filteredSuppliers.map((supplier) => (
+            {suppliers.map((supplier) => (
               <SupplierCard
                 key={supplier.id}
                 supplier={supplier}
                 layout="list"
                 isFavorite={isSaved(supplier.id, 'supplier')}
-                onFavoritePress={() => toggleSaved(supplier.id, 'supplier')}
-                onPress={() => handleSupplierPress(supplier.id)}
+                onFavoritePress={() => void toggleSaved(supplier.id, 'supplier')}
+                onPress={() => void handleSupplierPress(supplier.id)}
               />
             ))}
+            {isLoadingMore ? (
+              <View style={styles.loadMoreState}>
+                <ActivityIndicator color={theme.colors.primary} />
+              </View>
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -128,8 +224,16 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.bodySm,
     color: theme.colors.onSurfaceVariant,
   },
+  centeredState: {
+    paddingVertical: theme.spacing.stackLg,
+    alignItems: 'center',
+  },
   list: {
     gap: theme.spacing.md,
+  },
+  loadMoreState: {
+    paddingVertical: theme.spacing.md,
+    alignItems: 'center',
   },
   emptyState: {
     alignItems: 'center',

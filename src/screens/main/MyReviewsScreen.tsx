@@ -1,15 +1,13 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getProduct, getSupplier } from '@api/catalog';
+import { getMyReviews, getMyReviewsDetailSummary } from '@api/reviews';
 import type { MyReviewsScreenProps } from '@appTypes/navigation';
+import type { BackendReview, MyReviewType, UserWrittenReview } from '@appTypes/reviewsApi';
 import MyReviewCard from '@components/reviews/MyReviewCard';
-import {
-  getMyReviewsSummary,
-  MOCK_USER_REVIEWS,
-  type MyReviewType,
-} from '@constants/mockMyReviews';
 import theme from '@theme/index';
 
 type FilterKey = 'all' | MyReviewType;
@@ -47,9 +45,67 @@ function StatTile({ label, value }: { label: string; value: string }) {
   );
 }
 
+async function mapBackendToUserReview(review: BackendReview): Promise<UserWrittenReview> {
+  if (review.subjectType === 'product') {
+    const productResult = await getProduct(review.subjectId);
+    const product = productResult.ok ? productResult.data : null;
+    return {
+      id: review.id,
+      type: 'product',
+      subjectId: review.subjectId,
+      subjectName: product?.name ?? 'Product',
+      subjectImageUri: product?.imageUri ?? '',
+      supplierName: product?.supplierName,
+      category: product?.category,
+      rating: review.rating,
+      date: review.createdAt,
+      text: review.text,
+      orderNumber: review.orderNumber,
+    };
+  }
+
+  const supplierResult = await getSupplier(review.subjectId);
+  const supplier = supplierResult.ok ? supplierResult.data : null;
+  return {
+    id: review.id,
+    type: 'supplier',
+    subjectId: review.subjectId,
+    subjectName: supplier?.name ?? 'Supplier',
+    subjectImageUri: supplier?.logoUri ?? '',
+    category: supplier?.categoryId,
+    rating: review.rating,
+    date: review.createdAt,
+    text: review.text,
+    orderNumber: review.orderNumber,
+  };
+}
+
 export default function MyReviewsScreen({ navigation }: MyReviewsScreenProps) {
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
-  const summary = useMemo(() => getMyReviewsSummary(MOCK_USER_REVIEWS), []);
+  const [reviews, setReviews] = useState<UserWrittenReview[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadReviews = async () => {
+    setIsLoading(true);
+    setError('');
+    const result = await getMyReviews();
+    if (!result.ok) {
+      setError(result.error.message);
+      setIsLoading(false);
+      return;
+    }
+
+    const enriched = await Promise.all(result.data.map(mapBackendToUserReview));
+    setReviews(enriched);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    void loadReviews();
+  }, []);
+
+  const summary = useMemo(() => getMyReviewsDetailSummary(reviews), [reviews]);
 
   const filteredReviews = useMemo(() => {
     if (activeFilter === 'all') {
@@ -73,77 +129,94 @@ export default function MyReviewsScreen({ navigation }: MyReviewsScreenProps) {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroIconWrap}>
-              <MaterialIcons name="rate-review" size={28} color={theme.colors.primary} />
+      {isLoading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.loadingState}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable onPress={() => void loadReviews()} accessibilityRole="button">
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.heroCard}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroIconWrap}>
+                <MaterialIcons name="rate-review" size={28} color={theme.colors.primary} />
+              </View>
+              <View style={styles.heroTextBlock}>
+                <Text style={styles.heroTitle}>Your feedback</Text>
+                <Text style={styles.heroSubtitle}>
+                  Reviews you have left on products and suppliers after orders on CivicBuild.
+                </Text>
+              </View>
             </View>
-            <View style={styles.heroTextBlock}>
-              <Text style={styles.heroTitle}>Your feedback</Text>
-              <Text style={styles.heroSubtitle}>
-                Reviews you have left on products and suppliers after orders on CivicBuild.
+
+            <View style={styles.statsRow}>
+              <StatTile label="Reviews" value={String(summary.totalCount)} />
+              <View style={styles.statDivider} />
+              <StatTile label="Products" value={String(summary.productCount)} />
+              <View style={styles.statDivider} />
+              <StatTile label="Suppliers" value={String(summary.supplierCount)} />
+            </View>
+
+            <View style={styles.avgRow}>
+              <Text style={styles.avgLabel}>Average rating given</Text>
+              <View style={styles.avgValueRow}>
+                <Text style={styles.avgValue}>{summary.averageRatingGiven.toFixed(1)}</Text>
+                <SummaryStars rating={summary.averageRatingGiven} />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.filterRow}>
+            {FILTERS.map((filter) => {
+              const isActive = activeFilter === filter.key;
+              return (
+                <Pressable
+                  key={filter.key}
+                  onPress={() => setActiveFilter(filter.key)}
+                  style={({ pressed }) => [
+                    styles.filterChip,
+                    isActive && styles.filterChipActive,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`Filter ${filter.label}`}
+                >
+                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                    {filter.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {filteredReviews.length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="star-outline" size={40} color={theme.colors.onSurfaceVariant} />
+              <Text style={styles.emptyTitle}>No reviews yet</Text>
+              <Text style={styles.emptyBody}>
+                After you complete an order, you can leave a review from the product or supplier
+                page.
               </Text>
             </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <StatTile label="Reviews" value={String(summary.totalCount)} />
-            <View style={styles.statDivider} />
-            <StatTile label="Products" value={String(summary.productCount)} />
-            <View style={styles.statDivider} />
-            <StatTile label="Suppliers" value={String(summary.supplierCount)} />
-          </View>
-
-          <View style={styles.avgRow}>
-            <Text style={styles.avgLabel}>Average rating given</Text>
-            <View style={styles.avgValueRow}>
-              <Text style={styles.avgValue}>{summary.averageRatingGiven.toFixed(1)}</Text>
-              <SummaryStars rating={summary.averageRatingGiven} />
+          ) : (
+            <View style={styles.reviewList}>
+              {filteredReviews.map((review) => (
+                <MyReviewCard key={review.id} review={review} />
+              ))}
             </View>
-          </View>
-        </View>
-
-        <View style={styles.filterRow}>
-          {FILTERS.map((filter) => {
-            const isActive = activeFilter === filter.key;
-            return (
-              <Pressable
-                key={filter.key}
-                onPress={() => setActiveFilter(filter.key)}
-                style={({ pressed }) => [
-                  styles.filterChip,
-                  isActive && styles.filterChipActive,
-                  pressed && styles.pressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={`Filter ${filter.label}`}
-              >
-                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                  {filter.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {filteredReviews.length === 0 ? (
-          <View style={styles.emptyState}>
-            <MaterialIcons name="star-outline" size={40} color={theme.colors.onSurfaceVariant} />
-            <Text style={styles.emptyTitle}>No reviews yet</Text>
-            <Text style={styles.emptyBody}>
-              After you complete an order, you can leave a review from the product or supplier page.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.reviewList}>
-            {filteredReviews.map((review) => (
-              <MyReviewCard key={review.id} review={review} />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -177,6 +250,25 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+  },
+  errorText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.error,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
   scrollContent: {
     padding: theme.spacing.marginMobile,

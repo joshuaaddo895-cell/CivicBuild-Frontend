@@ -84,7 +84,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
     if (!isGoogleSignInConfigured()) {
       setErrorMessage(
-        'Google Sign-In is not configured yet. Add Google client IDs to .env.development.',
+        'Google Sign-In is not configured yet. Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to .env.development.',
       );
       return;
     }

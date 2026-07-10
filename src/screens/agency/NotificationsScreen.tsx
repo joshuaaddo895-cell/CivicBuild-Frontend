@@ -1,46 +1,51 @@
-import { Image } from 'expo-image';
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { formatNotificationDate, getNotifications, markNotificationRead } from '@api/notifications';
 import type { NotificationsScreenProps } from '@appTypes/navigation';
+import type { BackendNotification } from '@appTypes/notificationsApi';
 import { EmptyState, ScreenHeader } from '@components/agency';
-import { ResendSuccessToast } from '@components/auth';
-import { useAuthStore } from '@store/authStore';
-import { useDeliveryPersonnelStore } from '@store/deliveryPersonnelStore';
 import theme from '@theme/index';
 
 export default function NotificationsScreen({ navigation }: NotificationsScreenProps) {
-  const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? 'buildstrong-ltd';
+  const [notifications, setNotifications] = useState<BackendNotification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const seedIfNeeded = useDeliveryPersonnelStore((state) => state.seedIfNeeded);
-  const pendingPersonnel = useDeliveryPersonnelStore((state) =>
-    state.getPendingByAgencyId(agencyId),
-  );
-  const approvePersonnel = useDeliveryPersonnelStore((state) => state.approvePersonnel);
-  const rejectPersonnel = useDeliveryPersonnelStore((state) => state.rejectPersonnel);
+  const loadNotifications = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastVisible, setToastVisible] = useState(false);
+    const result = await getNotifications();
+
+    if (result.ok) {
+      setNotifications(result.data);
+    } else {
+      setNotifications([]);
+      setError(result.error.message);
+    }
+
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
-    seedIfNeeded();
-  }, [seedIfNeeded]);
+    void loadNotifications();
+  }, [loadNotifications]);
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setToastVisible(true);
-  };
+  const handleNotificationPress = async (notification: BackendNotification) => {
+    if (notification.read) {
+      return;
+    }
 
-  const handleApprove = (personnelId: string, fullName: string) => {
-    approvePersonnel(personnelId);
-    showToast(`${fullName} approved — they can now access their dashboard`);
-  };
+    const result = await markNotificationRead(notification.id);
 
-  const handleReject = (personnelId: string, fullName: string) => {
-    rejectPersonnel(personnelId);
-    showToast(`${fullName}'s request was rejected`);
+    if (result.ok) {
+      setNotifications((current) =>
+        current.map((entry) => (entry.id === notification.id ? { ...entry, read: true } : entry)),
+      );
+    }
   };
 
   return (
@@ -49,67 +54,57 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
-          Delivery provider association requests for your construction agency.
+          Agency notifications and delivery updates will appear here.
         </Text>
 
-        {pendingPersonnel.length === 0 ? (
+        {isLoading ? (
+          <View style={styles.centeredState}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : error ? (
+          <EmptyState icon="error-outline" title="Could not load notifications" message={error} />
+        ) : notifications.length === 0 ? (
           <EmptyState
             icon="notifications-none"
-            title="No pending requests"
-            message="When delivery providers request to join your agency, their applications will appear here."
+            title="No notifications yet"
+            message="You are all caught up. New activity from delivery providers and orders will show up here."
           />
         ) : (
-          pendingPersonnel.map((person) => (
-            <View key={person.id} style={styles.card}>
-              {person.profileImageUri ? (
-                <Image
-                  source={{ uri: person.profileImageUri }}
-                  style={styles.avatar}
-                  contentFit="cover"
-                  accessibilityLabel={`${person.fullName} profile photo`}
-                />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitial}>{person.fullName.charAt(0)}</Text>
+          <View style={styles.list}>
+            {notifications.map((notification) => (
+              <Pressable
+                key={notification.id}
+                onPress={() => void handleNotificationPress(notification)}
+                style={({ pressed }) => [
+                  styles.card,
+                  !notification.read && styles.cardUnread,
+                  pressed && styles.cardPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={notification.title}
+              >
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardTitle}>{notification.title}</Text>
+                  <Text style={styles.cardDate}>
+                    {formatNotificationDate(notification.createdAt)}
+                  </Text>
                 </View>
-              )}
-
-              <View style={styles.cardBody}>
-                <Text style={styles.name}>{person.fullName}</Text>
-                <Text style={styles.vehicle}>{person.vehicleInfo}</Text>
-                <Text style={styles.requestLabel}>Delivery provider association request</Text>
-
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => handleApprove(person.id, person.fullName)}
-                    style={({ pressed }) => [styles.approveButton, pressed && styles.pressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Approve ${person.fullName}`}
-                  >
-                    <Text style={styles.approveText}>Approve</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => handleReject(person.id, person.fullName)}
-                    style={({ pressed }) => [styles.rejectButton, pressed && styles.pressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Reject ${person.fullName}`}
-                  >
-                    <Text style={styles.rejectText}>Reject</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          ))
+                <Text style={styles.cardBody}>{notification.body}</Text>
+                {!notification.read ? (
+                  <View style={styles.unreadBadge}>
+                    <MaterialIcons
+                      name="fiber-manual-record"
+                      size={8}
+                      color={theme.colors.primary}
+                    />
+                    <Text style={styles.unreadText}>Unread</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
         )}
       </ScrollView>
-
-      <View style={styles.toastContainer}>
-        <ResendSuccessToast
-          message={toastMessage}
-          visible={toastVisible}
-          onHide={() => setToastVisible(false)}
-        />
-      </View>
     </SafeAreaView>
   );
 }
@@ -122,106 +117,70 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: theme.spacing.marginMobile,
     paddingBottom: theme.spacing.stackLg,
-    gap: theme.spacing.sm,
+    gap: theme.spacing.stackMd,
   },
   intro: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.bodyMd,
+    lineHeight: theme.typography.lineHeight.bodyMd,
     color: theme.colors.onSurfaceVariant,
-    marginBottom: theme.spacing.sm,
+  },
+  centeredState: {
+    paddingVertical: theme.spacing.stackLg,
+    alignItems: 'center',
+  },
+  list: {
+    gap: theme.spacing.sm,
   },
   card: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
     padding: theme.spacing.md,
     borderRadius: theme.borderRadius.xl,
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.outlineVariant,
+    gap: theme.spacing.xs,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  cardUnread: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surfaceContainerLowest,
   },
-  avatarFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.primaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardPressed: {
+    opacity: 0.85,
   },
-  avatarInitial: {
-    fontFamily: theme.typography.fontFamily.headline,
-    fontSize: theme.typography.fontSize.headlineSm,
-    color: theme.colors.onPrimaryContainer,
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
   },
-  cardBody: {
+  cardTitle: {
     flex: 1,
-    gap: 4,
-  },
-  name: {
     fontFamily: theme.typography.fontFamily.bodySemi,
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.onSurface,
     fontWeight: '600',
   },
-  vehicle: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.fontSize.bodySm,
+  cardDate: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
     color: theme.colors.onSurfaceVariant,
   },
-  requestLabel: {
-    fontFamily: theme.typography.fontFamily.label,
-    fontSize: theme.typography.fontSize.labelMd,
-    color: theme.colors.tertiary,
-    textTransform: 'uppercase',
-    marginTop: 2,
+  cardBody: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    lineHeight: theme.typography.lineHeight.bodySm,
+    color: theme.colors.onSurfaceVariant,
   },
-  actions: {
+  unreadBadge: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
-  },
-  approveButton: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.primary,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
   },
-  approveText: {
+  unreadText: {
     fontFamily: theme.typography.fontFamily.label,
     fontSize: theme.typography.fontSize.labelMd,
-    color: theme.colors.onPrimary,
+    color: theme.colors.primary,
     textTransform: 'uppercase',
-  },
-  rejectButton: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rejectText: {
-    fontFamily: theme.typography.fontFamily.label,
-    fontSize: theme.typography.fontSize.labelMd,
-    color: theme.colors.error,
-    textTransform: 'uppercase',
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  toastContainer: {
-    position: 'absolute',
-    bottom: theme.spacing.lg,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    pointerEvents: 'none',
   },
 });

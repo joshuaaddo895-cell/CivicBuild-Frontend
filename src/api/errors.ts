@@ -20,13 +20,39 @@ export interface NormalizedApiError {
   fieldErrors?: Record<string, string[]>;
 }
 
+interface BackendFieldError {
+  field?: string;
+  message?: string;
+}
+
 interface BackendErrorBody {
   success?: boolean;
   message?: string;
   error?: string;
   statusCode?: number;
-  errors?: Record<string, string[]>;
+  errors?: Record<string, string[]> | BackendFieldError[] | null;
   data?: unknown;
+}
+
+function normalizeFieldErrors(
+  errors: BackendErrorBody['errors'],
+): Record<string, string[]> | undefined {
+  if (!errors) {
+    return undefined;
+  }
+
+  if (Array.isArray(errors)) {
+    const mapped: Record<string, string[]> = {};
+    for (const entry of errors) {
+      if (!entry.field || !entry.message) {
+        continue;
+      }
+      mapped[entry.field] = [...(mapped[entry.field] ?? []), entry.message];
+    }
+    return Object.keys(mapped).length > 0 ? mapped : undefined;
+  }
+
+  return errors;
 }
 
 function mapStatusToCode(status: number | null): AuthApiErrorCode {
@@ -96,7 +122,7 @@ export function normalizeApiError(error: unknown): NormalizedApiError {
       message: extractBackendMessage(axiosError.response.data, status),
       statusCode: status,
       code: mapStatusToCode(status),
-      fieldErrors: axiosError.response.data?.errors,
+      fieldErrors: normalizeFieldErrors(axiosError.response.data?.errors),
     };
   }
 

@@ -1,35 +1,28 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { getProducts } from '@api/catalog';
 import type { AgencyProductInput } from '@appTypes/agency';
 import type { Product } from '@appTypes/marketplace';
-import { MOCK_PRODUCTS } from '@constants/mockProducts';
 import { formatGhCedisPrice } from '@utils/paystackAmount';
 import { enrichProduct } from '@utils/productEnrichment';
 
-interface ProductCustomizationState {
-  extraProducts: Product[];
-  removedProductIds: string[];
-  productOverrides: Record<string, Partial<Product>>;
-}
-
-interface ProductStoreState extends ProductCustomizationState {
-  hasInitialized: boolean;
+interface ProductStoreState {
+  catalogProducts: Product[];
+  isLoadingCatalog: boolean;
+  catalogError: string | null;
+  hasFetchedCatalog: boolean;
 }
 
 interface ProductStoreActions {
-  initialize: () => void;
+  fetchCatalog: () => Promise<void>;
   getAllProducts: () => Product[];
   getProductsByAgencyId: (agencyId: string) => Product[];
-  addAgencyProduct: (agencyId: string, input: AgencyProductInput) => Product;
-  updateAgencyProduct: (productId: string, agencyId: string, input: AgencyProductInput) => void;
-  deleteAgencyProduct: (productId: string, agencyId: string) => void;
+  addAgencyProduct: (product: Product) => void;
+  updateAgencyProduct: (product: Product) => void;
+  removeAgencyProduct: (productId: string) => void;
 }
 
 type ProductStore = ProductStoreState & ProductStoreActions;
-
-const BASE_PRODUCTS: Product[] = MOCK_PRODUCTS.map(enrichProduct);
 
 function buildProductFromInput(agencyId: string, input: AgencyProductInput, id?: string): Product {
   const unit = input.unit.startsWith('per ') ? input.unit : `per ${input.unit}`;
@@ -54,118 +47,74 @@ function buildProductFromInput(agencyId: string, input: AgencyProductInput, id?:
   });
 }
 
-function mergeProducts(state: ProductCustomizationState): Product[] {
-  const base = BASE_PRODUCTS.filter((product) => !state.removedProductIds.includes(product.id)).map(
-    (product) => ({
-      ...product,
-      ...state.productOverrides[product.id],
-    }),
-  );
+export const useProductStore = create<ProductStore>((set, get) => ({
+  catalogProducts: [],
+  isLoadingCatalog: false,
+  catalogError: null,
+  hasFetchedCatalog: false,
 
-  return [...base, ...state.extraProducts];
-}
+  fetchCatalog: async () => {
+    if (get().isLoadingCatalog) {
+      return;
+    }
 
-export const useProductStore = create<ProductStore>()(
-  persist(
-    (set, get) => ({
-      extraProducts: [],
-      removedProductIds: [],
-      productOverrides: {},
-      hasInitialized: false,
+    set({ isLoadingCatalog: true, catalogError: null });
 
-      initialize: () => {
-        if (get().hasInitialized) {
-          return;
-        }
-        set({ hasInitialized: true });
-      },
+    const result = await getProducts({ limit: 100 });
 
-      getAllProducts: () => mergeProducts(get()),
+    if (result.ok) {
+      set({
+        catalogProducts: result.data.items,
+        isLoadingCatalog: false,
+        hasFetchedCatalog: true,
+      });
+      return;
+    }
 
-      getProductsByAgencyId: (agencyId) =>
-        get()
-          .getAllProducts()
-          .filter((product) => product.agencyId === agencyId),
+    set({
+      catalogProducts: [],
+      isLoadingCatalog: false,
+      catalogError: result.error.message,
+      hasFetchedCatalog: true,
+    });
+  },
 
-      addAgencyProduct: (agencyId, input) => {
-        const product = buildProductFromInput(agencyId, input);
-        set((state) => ({
-          extraProducts: [...state.extraProducts, product],
-        }));
-        return product;
-      },
+  getAllProducts: () => get().catalogProducts,
 
-      updateAgencyProduct: (productId, agencyId, input) => {
-        const state = get();
-        const isExtra = state.extraProducts.some((product) => product.id === productId);
+  getProductsByAgencyId: (agencyId) =>
+    get().catalogProducts.filter((product) => product.agencyId === agencyId),
 
-        if (isExtra) {
-          set({
-            extraProducts: state.extraProducts.map((product) =>
-              product.id === productId && product.agencyId === agencyId
-                ? buildProductFromInput(agencyId, input, productId)
-                : product,
-            ),
-          });
-          return;
-        }
+  addAgencyProduct: (product) => {
+    set((state) => ({
+      catalogProducts: [
+        product,
+        ...state.catalogProducts.filter((entry) => entry.id !== product.id),
+      ],
+    }));
+  },
 
-        const existing = state.getAllProducts().find((product) => product.id === productId);
-        if (!existing || existing.agencyId !== agencyId) {
-          return;
-        }
+  updateAgencyProduct: (product) => {
+    set((state) => ({
+      catalogProducts: state.catalogProducts.map((entry) =>
+        entry.id === product.id ? product : entry,
+      ),
+    }));
+  },
 
-        set({
-          productOverrides: {
-            ...state.productOverrides,
-            [productId]: buildProductFromInput(agencyId, input, productId),
-          },
-        });
-      },
-
-      deleteAgencyProduct: (productId, agencyId) => {
-        const state = get();
-        const target = state.getAllProducts().find((product) => product.id === productId);
-        if (!target || target.agencyId !== agencyId) {
-          return;
-        }
-
-        const isExtra = state.extraProducts.some((product) => product.id === productId);
-        if (isExtra) {
-          set({
-            extraProducts: state.extraProducts.filter((product) => product.id !== productId),
-          });
-          return;
-        }
-
-        set({
-          removedProductIds: [...state.removedProductIds, productId],
-          productOverrides: Object.fromEntries(
-            Object.entries(state.productOverrides).filter(([id]) => id !== productId),
-          ),
-        });
-      },
-    }),
-    {
-      name: 'civicbuild-product-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
-        extraProducts: state.extraProducts,
-        removedProductIds: state.removedProductIds,
-        productOverrides: state.productOverrides,
-        hasInitialized: state.hasInitialized,
-      }),
-    },
-  ),
-);
+  removeAgencyProduct: (productId) => {
+    set((state) => ({
+      catalogProducts: state.catalogProducts.filter((entry) => entry.id !== productId),
+    }));
+  },
+}));
 
 /** Non-hook accessor for helpers outside React components. */
 export function getMarketplaceProducts(): Product[] {
-  useProductStore.getState().initialize();
   return useProductStore.getState().getAllProducts();
 }
 
-/** Live marketplace catalog — merges seed data with agency CRUD from productStore. */
 export function getPopularProducts(): Product[] {
   return getMarketplaceProducts();
 }
+
+export { buildProductFromInput };

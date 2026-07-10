@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { completeOnboarding as completeOnboardingApi, patchOnboarding } from '@api/onboarding';
 import type { RoleSelectionScreenProps } from '@appTypes/navigation';
 import type { AccountType } from '@appTypes/onboarding';
 import { AuthDecorBackground, AuthFooterLink } from '@components/auth';
@@ -13,21 +14,40 @@ import theme from '@theme/index';
 
 export default function RoleSelectionScreen({ navigation }: RoleSelectionScreenProps) {
   const [selectedRole, setSelectedRole] = useState<AccountType>('customer');
-  const setAccountType = useAuthStore((state) => state.setAccountType);
-  const completeOnboarding = useAuthStore((state) => state.completeOnboarding);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const applyServerOnboarding = useAuthStore((state) => state.applyServerOnboarding);
   const logout = useAuthStore((state) => state.logout);
 
-  const handleContinue = () => {
-    setAccountType(selectedRole);
+  const handleContinue = async () => {
+    setErrorMessage('');
+    setIsSubmitting(true);
 
-    const step = getOnboardingStep(selectedRole);
+    try {
+      const patchResult = await patchOnboarding({ accountType: selectedRole });
+      if (!patchResult.ok) {
+        setErrorMessage(patchResult.error.message);
+        return;
+      }
 
-    if (step === 'complete') {
-      completeOnboarding();
-      return;
+      applyServerOnboarding(patchResult.data);
+
+      const step = getOnboardingStep(selectedRole);
+
+      if (step === 'complete') {
+        const completeResult = await completeOnboardingApi();
+        if (!completeResult.ok) {
+          setErrorMessage(completeResult.error.message);
+          return;
+        }
+        applyServerOnboarding(completeResult.data);
+        return;
+      }
+
+      navigation.navigate(ONBOARDING_SCREEN_BY_STEP[step]);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    navigation.navigate(ONBOARDING_SCREEN_BY_STEP[step]);
   };
 
   const handleLogIn = () => {
@@ -55,8 +75,10 @@ export default function RoleSelectionScreen({ navigation }: RoleSelectionScreenP
             ))}
           </View>
 
+          {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+
           <View style={styles.actions}>
-            <OnboardingContinueButton onPress={handleContinue} />
+            <OnboardingContinueButton loading={isSubmitting} onPress={handleContinue} />
             <AuthFooterLink
               prompt="Already have an account?"
               linkText="Log In"
@@ -93,5 +115,12 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     marginTop: 'auto',
     paddingTop: theme.spacing.stackMd,
+  },
+  error: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.error,
+    marginBottom: theme.spacing.sm,
+    textAlign: 'center',
   },
 });

@@ -1,6 +1,4 @@
-import type { MarketplaceCategory, Product, Supplier } from '@appTypes/marketplace';
-
-import { ALL_SUPPLIERS, DASHBOARD_SUPPLIER_LIMIT } from './mockSuppliers';
+import type { MarketplaceCategory, Product } from '@appTypes/marketplace';
 
 export const MARKETPLACE_LOCATION = 'Accra, Ghana';
 
@@ -17,18 +15,13 @@ export const MARKETPLACE_CATEGORIES: MarketplaceCategory[] = [
   { id: 'electrical', label: 'Electrical' },
 ];
 
-/** Full supplier catalog — used by enrichment, favorites, and All Suppliers. */
-export const TRUSTED_SUPPLIERS: Supplier[] = ALL_SUPPLIERS;
-
-/** Subset shown in the dashboard horizontal carousel. */
-export const DASHBOARD_SUPPLIERS: Supplier[] = ALL_SUPPLIERS.slice(0, DASHBOARD_SUPPLIER_LIMIT);
-
 export function filterProductsByCategory(products: Product[], categoryId: string): Product[] {
   if (categoryId === 'all') {
     return products;
   }
   return products.filter((product) => product.category.toLowerCase() === categoryId.toLowerCase());
 }
+
 export function filterProductsBySearch(products: Product[], query: string): Product[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
@@ -42,17 +35,18 @@ export function filterProductsBySearch(products: Product[], query: string): Prod
   );
 }
 
-export function filterSuppliersBySearch(suppliers: Supplier[], query: string): Supplier[] {
+export function filterSuppliersBySearch<T extends { name: string; categoryId: string }>(
+  suppliers: T[],
+  query: string,
+  categoryLabelResolver?: (categoryId: string) => string,
+): T[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
     return suppliers;
   }
 
   return suppliers.filter((supplier) => {
-    const categoryLabel =
-      MARKETPLACE_CATEGORIES.find(
-        (category) => category.id === supplier.categoryId,
-      )?.label.toLowerCase() ?? '';
+    const categoryLabel = categoryLabelResolver?.(supplier.categoryId).toLowerCase() ?? '';
 
     return (
       supplier.name.toLowerCase().includes(normalized) ||

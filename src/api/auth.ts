@@ -1,8 +1,7 @@
 import type { User } from '@appTypes/api';
 
+import { resolveAuthSession, type AuthSession } from './authSession';
 import {
-  mapAuthTokensToUser,
-  mapBackendUserToUser,
   mapRegisterDataToUser,
   unwrapApiResponse,
   type AuthResult,
@@ -11,6 +10,8 @@ import {
 } from './authTypes';
 import apiClient from './client';
 import { normalizeApiError } from './errors';
+
+export type { AuthSession } from './authSession';
 
 export interface RegisterInput {
   fullName: string;
@@ -31,12 +32,6 @@ export interface ResetPasswordInput {
 export interface ChangePasswordInput {
   currentPassword: string;
   newPassword: string;
-}
-
-export interface AuthSession {
-  user: User;
-  accessToken: string;
-  refreshToken: string;
 }
 
 export interface RegisterResult {
@@ -85,13 +80,9 @@ export async function login(input: LoginInput): Promise<AuthResult<AuthSession>>
         email: input.email.trim(),
         password: input.password,
       })
-      .then((response) => {
+      .then(async (response) => {
         const data = unwrapApiResponse(response.data);
-        return {
-          user: mapAuthTokensToUser(data, input.email.trim()),
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-        };
+        return resolveAuthSession(data, input.email.trim());
       }),
   );
 }
@@ -172,15 +163,9 @@ export async function googleSignIn(idToken: string): Promise<AuthResult<AuthSess
       .post<{ success: boolean; message: string; data: BackendAuthTokens }>('/api/auth/google', {
         idToken,
       })
-      .then((response) => {
+      .then(async (response) => {
         const data = unwrapApiResponse(response.data);
-        return {
-          user: data.user
-            ? mapBackendUserToUser(data.user)
-            : mapAuthTokensToUser(data, 'google.user@gmail.com'),
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-        };
+        return resolveAuthSession(data);
       }),
   );
 }

@@ -1,14 +1,23 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { deleteAgencyPost, getMyAgencyPosts } from '@api/agencies';
+import type { AgencyPost } from '@appTypes/agency';
 import type { AgencyPostsScreenProps } from '@appTypes/navigation';
 import { EmptyState, ScreenHeader } from '@components/agency';
-import { AGENCY_POST_TYPE_LABELS } from '@constants/mockAgencyPosts';
-import { useAgencyPostsStore } from '@store/agencyPostsStore';
-import { useAuthStore } from '@store/authStore';
+import { AGENCY_POST_TYPE_LABELS } from '@constants/agencyPostLabels';
 import theme from '@theme/index';
+import { mapBackendAgencyPost } from '@utils/agencyPostMappers';
 
 function formatPostDate(isoDate: string): string {
   return new Date(isoDate).toLocaleDateString('en-GH', {
@@ -19,16 +28,34 @@ function formatPostDate(isoDate: string): string {
 }
 
 export default function AgencyPostsScreen({ navigation }: AgencyPostsScreenProps) {
-  const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? 'buildstrong-ltd';
+  const [posts, setPosts] = useState<AgencyPost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  const seedIfNeeded = useAgencyPostsStore((state) => state.seedIfNeeded);
-  const posts = useAgencyPostsStore((state) => state.getPostsByAgencyId(agencyId));
-  const deletePost = useAgencyPostsStore((state) => state.deletePost);
+  const loadPosts = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
+
+    const result = await getMyAgencyPosts();
+    if (!result.ok) {
+      setLoadError(result.error.message);
+      setIsLoading(false);
+      return;
+    }
+
+    setPosts(
+      result.data
+        .map(mapBackendAgencyPost)
+        .sort(
+          (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+        ),
+    );
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
-    seedIfNeeded();
-  }, [seedIfNeeded]);
+    void loadPosts();
+  }, [loadPosts]);
 
   const handleDelete = (postId: string, title: string) => {
     Alert.alert('Delete post', `Remove "${title}"?`, [
@@ -36,7 +63,16 @@ export default function AgencyPostsScreen({ navigation }: AgencyPostsScreenProps
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => deletePost(postId, agencyId),
+        onPress: () => {
+          void (async () => {
+            const result = await deleteAgencyPost(postId);
+            if (result.ok) {
+              setPosts((current) => current.filter((post) => post.id !== postId));
+              return;
+            }
+            Alert.alert('Delete failed', result.error.message);
+          })();
+        },
       },
     ]);
   };
@@ -58,52 +94,73 @@ export default function AgencyPostsScreen({ navigation }: AgencyPostsScreenProps
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {posts.length === 0 ? (
-          <EmptyState
-            icon="campaign"
-            title="No posts yet"
-            message="Share service updates, material arrivals, or general news with customers on your agency profile."
-            actionLabel="Create Post"
-            onActionPress={() => navigation.navigate('AgencyPostForm', {})}
-          />
-        ) : (
-          posts.map((post) => (
-            <View key={post.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.typeTag}>
-                  <Text style={styles.typeText}>{AGENCY_POST_TYPE_LABELS[post.type]}</Text>
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : loadError ? (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{loadError}</Text>
+          <Pressable
+            onPress={() => void loadPosts()}
+            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading posts"
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {posts.length === 0 ? (
+            <EmptyState
+              icon="campaign"
+              title="No posts yet"
+              message="Share service updates, material arrivals, or general news with customers on your agency profile."
+              actionLabel="Create Post"
+              onActionPress={() => navigation.navigate('AgencyPostForm', {})}
+            />
+          ) : (
+            posts.map((post) => (
+              <View key={post.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.typeTag}>
+                    <Text style={styles.typeText}>{AGENCY_POST_TYPE_LABELS[post.type]}</Text>
+                  </View>
+                  <Text style={styles.date}>{formatPostDate(post.createdAt)}</Text>
                 </View>
-                <Text style={styles.date}>{formatPostDate(post.createdAt)}</Text>
+                <Text style={styles.title}>{post.title}</Text>
+                <Text style={styles.snippet} numberOfLines={3}>
+                  {post.description}
+                </Text>
+                <View style={styles.actions}>
+                  <Pressable
+                    onPress={() => navigation.navigate('AgencyPostForm', { postId: post.id })}
+                    style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${post.title}`}
+                  >
+                    <MaterialIcons name="edit" size={18} color={theme.colors.primary} />
+                    <Text style={styles.actionText}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleDelete(post.id, post.title)}
+                    style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${post.title}`}
+                  >
+                    <MaterialIcons name="delete-outline" size={18} color={theme.colors.error} />
+                    <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
+                  </Pressable>
+                </View>
               </View>
-              <Text style={styles.title}>{post.title}</Text>
-              <Text style={styles.snippet} numberOfLines={3}>
-                {post.description}
-              </Text>
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={() => navigation.navigate('AgencyPostForm', { postId: post.id })}
-                  style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit ${post.title}`}
-                >
-                  <MaterialIcons name="edit" size={18} color={theme.colors.primary} />
-                  <Text style={styles.actionText}>Edit</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => handleDelete(post.id, post.title)}
-                  style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Delete ${post.title}`}
-                >
-                  <MaterialIcons name="delete-outline" size={18} color={theme.colors.error} />
-                  <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+            ))
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -112,6 +169,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.marginMobile,
+    gap: theme.spacing.sm,
   },
   scrollContent: {
     padding: theme.spacing.marginMobile,
@@ -184,6 +248,24 @@ const styles = StyleSheet.create({
   },
   deleteText: {
     color: theme.colors.error,
+  },
+  errorText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.error,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    textTransform: 'uppercase',
   },
   pressed: {
     opacity: 0.75,

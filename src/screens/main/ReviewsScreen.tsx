@@ -1,12 +1,13 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getReviewSummary, getReviews } from '@api/reviews';
 import type { ReviewsScreenProps } from '@appTypes/navigation';
+import type { Review, ReviewSummary } from '@appTypes/reviewsApi';
 import RatingBreakdownChart from '@components/reviews/RatingBreakdownChart';
 import ReviewCard from '@components/reviews/ReviewCard';
-import { getMockReviewSummary } from '@constants/mockReviews';
 import theme from '@theme/index';
 
 function HeaderStars({ rating }: { rating: number }) {
@@ -29,7 +30,38 @@ function HeaderStars({ rating }: { rating: number }) {
 
 export default function ReviewsScreen({ navigation, route }: ReviewsScreenProps) {
   const { subjectType, subjectId, subjectName } = route.params;
-  const summary = getMockReviewSummary(subjectType, subjectId);
+  const [summary, setSummary] = useState<ReviewSummary | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      setIsLoading(true);
+      setError(null);
+
+      const [summaryResult, reviewsResult] = await Promise.all([
+        getReviewSummary(subjectType, subjectId),
+        getReviews(subjectType, subjectId),
+      ]);
+
+      if (!summaryResult.ok) {
+        setSummary(null);
+        setReviews([]);
+        setError(summaryResult.error.message);
+        setIsLoading(false);
+        return;
+      }
+
+      setSummary(summaryResult.data);
+      setReviews(reviewsResult.ok ? reviewsResult.data : []);
+      if (!reviewsResult.ok) {
+        setError(reviewsResult.error.message);
+      }
+
+      setIsLoading(false);
+    })();
+  }, [subjectId, subjectType]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -48,29 +80,46 @@ export default function ReviewsScreen({ navigation, route }: ReviewsScreenProps)
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.subjectName}>{subjectName}</Text>
-
-        <View style={styles.summaryCard}>
-          <Text style={styles.averageRating}>{summary.averageRating.toFixed(1)}</Text>
-          <HeaderStars rating={summary.averageRating} />
-          <Text style={styles.reviewCount}>
-            {summary.totalCount} review{summary.totalCount === 1 ? '' : 's'}
-          </Text>
+      {isLoading ? (
+        <View style={styles.centeredState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
-
-        <Text style={styles.sectionTitle}>Rating breakdown</Text>
-        <View style={styles.breakdownCard}>
-          <RatingBreakdownChart breakdown={summary.breakdown} />
+      ) : error && !summary ? (
+        <View style={styles.centeredState}>
+          <Text style={styles.errorText}>{error}</Text>
         </View>
+      ) : summary ? (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.subjectName}>{subjectName}</Text>
 
-        <Text style={styles.sectionTitle}>Customer reviews</Text>
-        <View style={styles.reviewList}>
-          {summary.reviews.map((review) => (
-            <ReviewCard key={review.id} review={review} />
-          ))}
-        </View>
-      </ScrollView>
+          <View style={styles.summaryCard}>
+            <Text style={styles.averageRating}>{summary.averageRating.toFixed(1)}</Text>
+            <HeaderStars rating={summary.averageRating} />
+            <Text style={styles.reviewCount}>
+              {summary.totalCount} review{summary.totalCount === 1 ? '' : 's'}
+            </Text>
+          </View>
+
+          <Text style={styles.sectionTitle}>Rating breakdown</Text>
+          <View style={styles.breakdownCard}>
+            <RatingBreakdownChart breakdown={summary.breakdown} />
+          </View>
+
+          <Text style={styles.sectionTitle}>Customer reviews</Text>
+          {reviews.length === 0 ? (
+            <Text style={styles.emptyText}>No reviews yet.</Text>
+          ) : (
+            <View style={styles.reviewList}>
+              {reviews.map((review) => (
+                <ReviewCard key={review.id} review={review} />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -104,6 +153,18 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  centeredState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  errorText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.error,
+    textAlign: 'center',
   },
   scrollContent: {
     padding: theme.spacing.marginMobile,
@@ -152,6 +213,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.outlineVariant,
     padding: theme.spacing.lg,
+  },
+  emptyText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.onSurfaceVariant,
   },
   reviewList: {
     gap: theme.spacing.md,

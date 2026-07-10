@@ -1,5 +1,5 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React, { useEffect } from 'react';
+import React from 'react';
 
 import type { RootStackParamList } from '@appTypes/navigation';
 import { useAuthStore } from '@store/authStore';
@@ -13,11 +13,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootNavigator() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const onboardingComplete = useAuthStore((state) => state.onboardingComplete);
-  const syncDeliveryProviderApproval = useAuthStore((state) => state.syncDeliveryProviderApproval);
-
-  useEffect(() => {
-    syncDeliveryProviderApproval();
-  }, [syncDeliveryProviderApproval, onboardingComplete, isAuthenticated]);
 
   const showAuth = !isAuthenticated;
   const showOnboarding = isAuthenticated && !onboardingComplete;

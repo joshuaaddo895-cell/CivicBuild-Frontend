@@ -3,6 +3,7 @@ import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import type { AccountType } from '@appTypes/onboarding';
 import theme from '@theme/index';
 
 export default function MainTabBarButton({
@@ -45,11 +46,15 @@ const styles = StyleSheet.create({
 export function getMainTabIcon(
   routeName: string,
   focused: boolean,
+  accountType?: AccountType | null,
 ): keyof typeof MaterialIcons.glyphMap {
   switch (routeName) {
     case 'Home':
       return 'home';
     case 'Saved':
+      if (accountType === 'construction') {
+        return 'post-add';
+      }
       return focused ? 'favorite' : 'favorite-border';
     case 'Messages':
       return focused ? 'chat-bubble' : 'chat-bubble-outline';

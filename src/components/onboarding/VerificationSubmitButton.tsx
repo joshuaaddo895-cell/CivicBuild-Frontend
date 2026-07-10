@@ -7,12 +7,14 @@ import theme from '@theme/index';
 interface VerificationSubmitButtonProps {
   loading?: boolean;
   disabled?: boolean;
+  label?: string;
   onPress: () => void;
 }
 
 export default function VerificationSubmitButton({
   loading = false,
   disabled = false,
+  label = 'Continue',
   onPress,
 }: VerificationSubmitButtonProps) {
   const isDisabled = disabled || loading;
@@ -27,7 +29,7 @@ export default function VerificationSubmitButton({
         pressed && !isDisabled && styles.buttonPressed,
       ]}
       accessibilityRole="button"
-      accessibilityLabel="Submit for Review"
+      accessibilityLabel={label}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
     >
       {loading ? (
@@ -37,7 +39,7 @@ export default function VerificationSubmitButton({
         </View>
       ) : (
         <View style={styles.content}>
-          <Text style={[styles.label, isDisabled && styles.labelDisabled]}>Submit for Review</Text>
+          <Text style={[styles.label, isDisabled && styles.labelDisabled]}>{label}</Text>
           <MaterialIcons
             name="arrow-forward"
             size={22}

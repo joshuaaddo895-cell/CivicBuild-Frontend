@@ -5,10 +5,10 @@ import React, { useCallback, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getAgency } from '@api/agencies';
 import type { PendingCompanyConfirmationScreenProps } from '@appTypes/navigation';
 import { AuthDecorBackground } from '@components/auth';
 import DeleteAccountModal from '@components/settings/DeleteAccountModal';
-import { findConstructionAgencyById } from '@constants/constructionAgencies';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 import { performDeleteAccount } from '@utils/session';
@@ -49,14 +49,23 @@ export default function PendingCompanyConfirmationScreen({
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const agency = findConstructionAgencyById(deliveryProviderProfile?.constructionAgencyId ?? null);
-  const isRejected = deliveryProviderStatus === 'rejected';
+  const [agencyName, setAgencyName] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       syncDeliveryProviderApproval();
-    }, [syncDeliveryProviderApproval]),
+      const agencyId = deliveryProviderProfile?.constructionAgencyId;
+      if (agencyId) {
+        void getAgency(agencyId).then((result) => {
+          if (result.ok) {
+            setAgencyName(result.data.name);
+          }
+        });
+      }
+    }, [deliveryProviderProfile?.constructionAgencyId, syncDeliveryProviderApproval]),
   );
+
+  const isRejected = deliveryProviderStatus === 'rejected';
 
   const resetToRoleSelection = () => {
     navigation.reset({
@@ -112,15 +121,15 @@ export default function PendingCompanyConfirmationScreen({
           <Text style={styles.subtitle}>
             {isRejected ? (
               <>
-                <Text style={styles.agencyName}>{agency?.name ?? 'The selected company'}</Text>{' '}
+                <Text style={styles.agencyName}>{agencyName ?? 'The selected company'}</Text>{' '}
                 declined your delivery provider association. You can edit your profile and submit
                 again.
               </>
             ) : (
               <>
-                <Text style={styles.agencyName}>{agency?.name ?? 'The selected company'}</Text>{' '}
-                needs to approve your association before you can start receiving deliveries.
-                We&apos;ll notify you once approved.
+                <Text style={styles.agencyName}>{agencyName ?? 'The selected company'}</Text> needs
+                to approve your association before you can start receiving deliveries. We&apos;ll
+                notify you once approved.
               </>
             )}
           </Text>
@@ -147,7 +156,7 @@ export default function PendingCompanyConfirmationScreen({
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Construction company</Text>
-              <Text style={styles.summaryValue}>{agency?.name ?? '—'}</Text>
+              <Text style={styles.summaryValue}>{agencyName ?? '—'}</Text>
             </View>
           </View>
 

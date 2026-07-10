@@ -1,21 +1,56 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { formatMessageTimestamp, getThreads } from '@api/messages';
+import type { MessageThread } from '@appTypes/messages';
 import type { MessagesListScreenProps } from '@appTypes/navigation';
-import { formatMessageTimestamp, MESSAGE_THREADS } from '@constants/messagesData';
 import theme from '@theme/index';
 
 export default function MessagesScreen({ navigation }: MessagesListScreenProps) {
+  const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadThreads = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const result = await getThreads();
+
+    if (result.ok) {
+      setThreads(result.data);
+    } else {
+      setThreads([]);
+      setError(result.error.message);
+    }
+
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadThreads();
+  }, [loadThreads]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.screenTitle} accessibilityRole="header">
         Messages
       </Text>
 
-      {MESSAGE_THREADS.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.centeredState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.emptyState}>
+          <MaterialIcons name="error-outline" size={48} color={theme.colors.error} />
+          <Text style={styles.emptyTitle}>Could not load messages</Text>
+          <Text style={styles.emptySubtitle}>{error}</Text>
+        </View>
+      ) : threads.length === 0 ? (
         <View style={styles.emptyState}>
           <MaterialIcons name="chat-bubble-outline" size={48} color={theme.colors.outline} />
           <Text style={styles.emptyTitle}>No messages yet</Text>
@@ -25,7 +60,7 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
         </View>
       ) : (
         <FlatList
-          data={MESSAGE_THREADS}
+          data={threads}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => {
@@ -33,17 +68,33 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
 
             return (
               <Pressable
-                onPress={() => navigation.navigate('ConversationDetail', { threadId: item.id })}
+                onPress={() =>
+                  navigation.navigate('ConversationDetail', {
+                    threadId: item.id,
+                    participantName: item.participantName,
+                    participantLogoUri: item.participantLogoUri,
+                  })
+                }
                 style={({ pressed }) => [styles.threadRow, pressed && styles.threadRowPressed]}
                 accessibilityRole="button"
                 accessibilityLabel={`Conversation with ${item.participantName}`}
               >
-                <Image
-                  source={{ uri: item.participantLogoUri }}
-                  style={styles.avatar}
-                  contentFit="cover"
-                  accessibilityLabel={`${item.participantName} logo`}
-                />
+                {item.participantLogoUri ? (
+                  <Image
+                    source={{ uri: item.participantLogoUri }}
+                    style={styles.avatar}
+                    contentFit="cover"
+                    accessibilityLabel={`${item.participantName} logo`}
+                  />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                    <MaterialIcons
+                      name="business"
+                      size={24}
+                      color={theme.colors.onSurfaceVariant}
+                    />
+                  </View>
+                )}
                 <View style={styles.threadBody}>
                   <View style={styles.threadHeader}>
                     <Text
@@ -91,6 +142,11 @@ const styles = StyleSheet.create({
     color: theme.colors.onSurface,
     marginBottom: theme.spacing.stackMd,
   },
+  centeredState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -129,6 +185,10 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     backgroundColor: theme.colors.surfaceContainerHigh,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   threadBody: {
     flex: 1,

@@ -1,7 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -13,47 +14,70 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { SavedScreenProps } from '@appTypes/navigation';
+import type { SavedItemDetail } from '@appTypes/saved';
 import { CategoryChipList, ScrollToTopButton } from '@components/dashboard';
 import { MARKETPLACE_CATEGORIES } from '@constants/marketplaceData';
-import { getPopularProducts } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
-import { resolveSavedItemDetail } from '@utils/roleLabels';
+import { resolveSavedItemDetailAsync } from '@utils/roleLabels';
 
 export default function SavedScreen(_props: SavedScreenProps) {
-  const listRef = useRef<FlatList<NonNullable<ReturnType<typeof resolveSavedItemDetail>>>>(null);
+  const listRef = useRef<FlatList<SavedItemDetail>>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const items = useSavedStore((state) => state.items);
+  const [resolvedDetails, setResolvedDetails] = useState<SavedItemDetail[]>([]);
+  const [isResolving, setIsResolving] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
 
-  const popularProducts = useMemo(() => getPopularProducts(), []);
+  const items = useSavedStore((state) => state.items);
+  const isLoading = useSavedStore((state) => state.isLoading);
+  const error = useSavedStore((state) => state.error);
+  const syncFromServer = useSavedStore((state) => state.syncFromServer);
 
-  const filteredItems = useMemo(() => {
-    const sorted = [...items].sort(
-      (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
-    );
+  useEffect(() => {
+    void syncFromServer();
+  }, [syncFromServer]);
 
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()),
+    [items],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setIsResolving(true);
+
+      const details = await Promise.all(
+        sortedItems.map((item) => resolveSavedItemDetailAsync(item)),
+      );
+
+      if (!cancelled) {
+        setResolvedDetails(details.filter((item): item is SavedItemDetail => item !== null));
+        setIsResolving(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sortedItems]);
+
+  const filteredDetails = useMemo(() => {
     if (selectedCategoryId === 'all') {
-      return sorted;
+      return resolvedDetails;
     }
 
-    return sorted.filter((item) => {
+    return resolvedDetails.filter((item) => {
       if (item.type !== 'product') {
         return false;
       }
 
-      const product = popularProducts.find((entry) => entry.id === item.id);
-      return product?.category.toLowerCase() === selectedCategoryId.toLowerCase();
+      return item.subtitle.toLowerCase() === selectedCategoryId.toLowerCase();
     });
-  }, [items, popularProducts, selectedCategoryId]);
+  }, [resolvedDetails, selectedCategoryId]);
 
-  const savedDetails = useMemo(
-    () =>
-      filteredItems
-        .map((item) => resolveSavedItemDetail(item))
-        .filter((item): item is NonNullable<typeof item> => item !== null),
-    [filteredItems],
-  );
+  const showLoading = isLoading || isResolving;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -67,7 +91,17 @@ export default function SavedScreen(_props: SavedScreenProps) {
         onSelect={setSelectedCategoryId}
       />
 
-      {savedDetails.length === 0 ? (
+      {showLoading ? (
+        <View style={styles.centeredState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.emptyState}>
+          <MaterialIcons name="error-outline" size={48} color={theme.colors.error} />
+          <Text style={styles.emptyTitle}>Could not load saved items</Text>
+          <Text style={styles.emptySubtitle}>{error}</Text>
+        </View>
+      ) : filteredDetails.length === 0 ? (
         <View style={styles.emptyState}>
           <MaterialIcons name="favorite-border" size={48} color={theme.colors.outline} />
           <Text style={styles.emptyTitle}>
@@ -84,7 +118,7 @@ export default function SavedScreen(_props: SavedScreenProps) {
       ) : (
         <FlatList
           ref={listRef}
-          data={savedDetails}
+          data={filteredDetails}
           keyExtractor={(item) => `${item.type}-${item.id}`}
           contentContainerStyle={styles.listContent}
           onScroll={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -129,7 +163,7 @@ export default function SavedScreen(_props: SavedScreenProps) {
         />
       )}
       <ScrollToTopButton
-        visible={showScrollTop && savedDetails.length > 0}
+        visible={showScrollTop && filteredDetails.length > 0}
         onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
         bottomOffset={24}
       />
@@ -151,6 +185,11 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.headlineLgMobile,
     color: theme.colors.onSurface,
     marginBottom: theme.spacing.stackMd,
+  },
+  centeredState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyState: {
     flex: 1,

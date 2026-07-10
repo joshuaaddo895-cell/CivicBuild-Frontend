@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { createAgency } from '@api/agencies';
+import { completeOnboarding as completeOnboardingApi } from '@api/onboarding';
 import type { VerificationScreenProps } from '@appTypes/navigation';
 import {
   createEmptyVerificationForm,
-  getRequiredVerificationDocumentTypes,
-  isVerificationFormValid,
   setVerificationDocument,
   updateVerificationField,
 } from '@appTypes/verification';
 import type { VerificationDocumentType } from '@appTypes/verificationDocuments';
-import { AuthDecorBackground, AuthErrorBanner } from '@components/auth';
+import { AuthDecorBackground } from '@components/auth';
 import {
   OnboardingProgressTracker,
   VerificationCategoryPicker,
@@ -27,13 +27,8 @@ import theme from '@theme/index';
 
 export default function VerificationScreen({ navigation }: VerificationScreenProps) {
   const accountType = useAuthStore((state) => state.accountType);
-  const completeOnboarding = useAuthStore((state) => state.completeOnboarding);
 
   const config = useMemo(() => getVerificationConfig(accountType), [accountType]);
-  const requiredDocumentTypes = useMemo(
-    () => getRequiredVerificationDocumentTypes('construction'),
-    [],
-  );
 
   const [formValues, setFormValues] = useState(createEmptyVerificationForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,26 +57,57 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     [navigation],
   );
 
-  const handleSubmit = useCallback(async () => {
-    setSubmitError('');
+  const finishOnboarding = useCallback(async () => {
+    const hasUploadedDocuments = Object.keys(formValues.documents).length > 0;
 
-    if (!isVerificationFormValid(formValues, requiredDocumentTypes)) {
-      setSubmitError('Complete all fields and upload the required verification documents.');
-      return;
+    if (hasUploadedDocuments) {
+      useAuthStore.getState().setVerificationStatus('pending');
     }
 
+    if (accountType === 'construction' && formValues.businessName.trim()) {
+      const agencyResult = await createAgency({
+        name: formValues.businessName.trim(),
+        category: formValues.category || 'general-contracting',
+      });
+
+      if (!agencyResult.ok) {
+        throw new Error(agencyResult.error.message);
+      }
+    }
+
+    const completeResult = await completeOnboardingApi();
+    if (!completeResult.ok) {
+      throw new Error(completeResult.error.message);
+    }
+
+    useAuthStore.getState().applyServerOnboarding(completeResult.data);
+  }, [accountType, formValues.businessName, formValues.category, formValues.documents]);
+
+  const handleContinue = useCallback(async () => {
+    setSubmitError('');
     setIsSubmitting(true);
 
     try {
-      useAuthStore.getState().setVerificationStatus('pending');
-      useAuthStore.getState().setManagedAgencyId('buildstrong-ltd');
-      completeOnboarding();
-    } catch {
-      setSubmitError('Unable to submit verification. Please try again.');
+      await finishOnboarding();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to complete setup.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [completeOnboarding, formValues, requiredDocumentTypes]);
+  }, [finishOnboarding]);
+
+  const handleSkip = useCallback(async () => {
+    setSubmitError('');
+    setIsSubmitting(true);
+
+    try {
+      await finishOnboarding();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to complete setup.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [finishOnboarding]);
 
   if (!config) {
     return null;
@@ -99,8 +125,6 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
       >
         <View style={styles.inner}>
           <VerificationHeader />
-
-          {submitError ? <AuthErrorBanner message={submitError} /> : null}
 
           <View style={styles.form}>
             <VerificationFormField
@@ -136,7 +160,23 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
 
             <VerificationInfoChip />
 
-            <VerificationSubmitButton loading={isSubmitting} onPress={handleSubmit} />
+            <VerificationSubmitButton
+              loading={isSubmitting}
+              label="Continue"
+              onPress={handleContinue}
+            />
+
+            {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
+
+            <Pressable
+              onPress={handleSkip}
+              disabled={isSubmitting}
+              style={styles.skipButton}
+              accessibilityRole="button"
+              accessibilityLabel="Skip for now"
+            >
+              <Text style={styles.skipText}>Skip for now</Text>
+            </Pressable>
           </View>
 
           <OnboardingProgressTracker />
@@ -164,5 +204,20 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: theme.spacing.stackMd,
+  },
+  skipButton: {
+    alignSelf: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
+  skipText: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.primary,
+  },
+  error: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.error,
+    textAlign: 'center',
   },
 });

@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,17 +12,28 @@ import {
   View,
 } from 'react-native';
 
+import { listAgencies, getAgency } from '@api/agencies';
 import type { ConstructionAgency } from '@appTypes/deliveryProvider';
-import {
-  filterConstructionAgencies,
-  findConstructionAgencyById,
-} from '@constants/constructionAgencies';
 import theme from '@theme/index';
 
 interface ConstructionAgencySelectProps {
   selectedAgencyId: string | null;
   onSelect: (agencyId: string) => void;
   isLoading?: boolean;
+}
+
+function mapAgency(agency: {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+  verified: boolean;
+}): ConstructionAgency {
+  return {
+    id: agency.id,
+    name: agency.name,
+    logoUri: agency.logoUrl ?? '',
+    verified: agency.verified,
+  };
 }
 
 export default function ConstructionAgencySelect({
@@ -32,12 +43,74 @@ export default function ConstructionAgencySelect({
 }: ConstructionAgencySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [agencies, setAgencies] = useState<ConstructionAgency[]>([]);
+  const [selectedAgencyCache, setSelectedAgencyCache] = useState<ConstructionAgency | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const agencies = useMemo(() => filterConstructionAgencies(searchQuery), [searchQuery]);
-  const selectedAgency = useMemo(
-    () => findConstructionAgencyById(selectedAgencyId),
-    [selectedAgencyId],
-  );
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const selectedAgency = useMemo(() => {
+    if (!selectedAgencyId) {
+      return null;
+    }
+    return (
+      agencies.find((agency) => agency.id === selectedAgencyId) ??
+      (selectedAgencyCache?.id === selectedAgencyId ? selectedAgencyCache : null)
+    );
+  }, [agencies, selectedAgencyCache, selectedAgencyId]);
+
+  useEffect(() => {
+    if (!selectedAgencyId) {
+      setSelectedAgencyCache(null);
+      return;
+    }
+
+    if (agencies.some((agency) => agency.id === selectedAgencyId)) {
+      return;
+    }
+
+    void (async () => {
+      const result = await getAgency(selectedAgencyId);
+      if (result.ok) {
+        setSelectedAgencyCache(mapAgency(result.data));
+      }
+    })();
+  }, [agencies, selectedAgencyId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    searchDebounceRef.current = setTimeout(() => {
+      void (async () => {
+        setIsFetching(true);
+        setFetchError(null);
+
+        const result = await listAgencies(searchQuery.trim() || undefined, 0, 50);
+
+        if (result.ok) {
+          setAgencies(result.data.items.map(mapAgency));
+        } else {
+          setAgencies([]);
+          setFetchError(result.error.message);
+        }
+
+        setIsFetching(false);
+      })();
+    }, 300);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [isOpen, searchQuery]);
 
   const handleSelect = (agency: ConstructionAgency) => {
     onSelect(agency.id);
@@ -60,12 +133,18 @@ export default function ConstructionAgencySelect({
           <ActivityIndicator color={theme.colors.primary} />
         ) : selectedAgency ? (
           <View style={styles.selectedRow}>
-            <Image
-              source={{ uri: selectedAgency.logoUri }}
-              style={styles.selectedLogo}
-              contentFit="cover"
-              accessibilityLabel={`${selectedAgency.name} logo`}
-            />
+            {selectedAgency.logoUri ? (
+              <Image
+                source={{ uri: selectedAgency.logoUri }}
+                style={styles.selectedLogo}
+                contentFit="cover"
+                accessibilityLabel={`${selectedAgency.name} logo`}
+              />
+            ) : (
+              <View style={[styles.selectedLogo, styles.logoPlaceholder]}>
+                <MaterialIcons name="business" size={18} color={theme.colors.onSurfaceVariant} />
+              </View>
+            )}
             <Text style={styles.selectedName} numberOfLines={1}>
               {selectedAgency.name}
             </Text>
@@ -104,7 +183,17 @@ export default function ConstructionAgencySelect({
             />
           </View>
 
-          {agencies.length === 0 ? (
+          {isFetching ? (
+            <View style={styles.centeredState}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : fetchError ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="error-outline" size={40} color={theme.colors.error} />
+              <Text style={styles.emptyTitle}>Could not load companies</Text>
+              <Text style={styles.emptySubtitle}>{fetchError}</Text>
+            </View>
+          ) : agencies.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="business" size={40} color={theme.colors.outline} />
               <Text style={styles.emptyTitle}>No construction companies found yet</Text>
@@ -124,12 +213,22 @@ export default function ConstructionAgencySelect({
                   accessibilityRole="button"
                   accessibilityLabel={item.name}
                 >
-                  <Image
-                    source={{ uri: item.logoUri }}
-                    style={styles.optionLogo}
-                    contentFit="cover"
-                    accessibilityLabel={`${item.name} logo`}
-                  />
+                  {item.logoUri ? (
+                    <Image
+                      source={{ uri: item.logoUri }}
+                      style={styles.optionLogo}
+                      contentFit="cover"
+                      accessibilityLabel={`${item.name} logo`}
+                    />
+                  ) : (
+                    <View style={[styles.optionLogo, styles.logoPlaceholder]}>
+                      <MaterialIcons
+                        name="business"
+                        size={20}
+                        color={theme.colors.onSurfaceVariant}
+                      />
+                    </View>
+                  )}
                   <View style={styles.optionContent}>
                     <Text style={styles.optionName}>{item.name}</Text>
                     {item.verified ? (
@@ -196,6 +295,11 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: theme.borderRadius.md,
   },
+  logoPlaceholder: {
+    backgroundColor: theme.colors.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   selectedName: {
     flex: 1,
     fontFamily: theme.typography.fontFamily.bodySemi,
@@ -241,6 +345,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.onSurface,
     paddingVertical: theme.spacing.xs,
+  },
+  centeredState: {
+    paddingVertical: theme.spacing.stackLg,
+    alignItems: 'center',
   },
   emptyState: {
     alignItems: 'center',

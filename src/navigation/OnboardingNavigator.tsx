@@ -13,18 +13,10 @@ import theme from '@theme/index';
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
 function getInitialOnboardingRoute(): keyof OnboardingStackParamList {
-  const { accountType, deliveryProviderStatus } = useAuthStore.getState();
+  const { accountType } = useAuthStore.getState();
 
   if (!accountType) {
     return 'RoleSelection';
-  }
-
-  if (accountType === 'delivery' && deliveryProviderStatus === 'pending_company_confirmation') {
-    return 'PendingCompanyConfirmation';
-  }
-
-  if (accountType === 'delivery' && deliveryProviderStatus === 'rejected') {
-    return 'PendingCompanyConfirmation';
   }
 
   if (accountType === 'delivery') {
@@ -40,11 +32,10 @@ function getInitialOnboardingRoute(): keyof OnboardingStackParamList {
 
 export default function OnboardingNavigator() {
   const accountType = useAuthStore((state) => state.accountType);
-  const deliveryProviderStatus = useAuthStore((state) => state.deliveryProviderStatus);
 
   return (
     <Stack.Navigator
-      key={`${accountType ?? 'unset'}:${deliveryProviderStatus}`}
+      key={accountType ?? 'unset'}
       initialRouteName={getInitialOnboardingRoute()}
       screenOptions={{
         headerShown: false,
@@ -56,12 +47,12 @@ export default function OnboardingNavigator() {
       <Stack.Screen name="Verification" component={VerificationScreen} />
       <Stack.Screen name="DeliveryProviderSetup" component={DeliveryProviderSetupScreen} />
       <Stack.Screen
-        name="VerificationDocumentPreview"
-        component={VerificationDocumentPreviewScreen}
-      />
-      <Stack.Screen
         name="PendingCompanyConfirmation"
         component={PendingCompanyConfirmationScreen}
+      />
+      <Stack.Screen
+        name="VerificationDocumentPreview"
+        component={VerificationDocumentPreviewScreen}
       />
     </Stack.Navigator>
   );

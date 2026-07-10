@@ -1,5 +1,5 @@
 import type { ApiResponse, User } from '@appTypes/api';
-import { parseDisplayName } from '@utils/mockAuth';
+import { parseDisplayName } from '@utils/userDisplay';
 
 import type { NormalizedApiError } from './errors';
 
@@ -62,19 +62,11 @@ export function mapRegisterDataToUser(data: BackendRegisterData): User {
 }
 
 export function mapAuthTokensToUser(tokens: BackendAuthTokens, fallbackEmail?: string): User {
-  if (tokens.user) {
+  if (tokens.user?.id) {
     return mapBackendUserToUser(tokens.user, fallbackEmail);
   }
 
-  return mapBackendUserToUser(
-    {
-      id: 'unknown-user',
-      email: fallbackEmail ?? '',
-      fullName: fallbackEmail?.split('@')[0],
-      role: 'CUSTOMER',
-    },
-    fallbackEmail,
-  );
+  throw new Error('Auth token response did not include a user. Fetch /api/users/me instead.');
 }
 
 export type AuthResult<T> = { ok: true; data: T } | { ok: false; error: NormalizedApiError };

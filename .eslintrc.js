@@ -22,6 +22,7 @@ module.exports = {
       },
     ],
     'no-console': ['warn', { allow: ['warn', 'error'] }],
+    'no-void': ['warn', { allowAsStatement: true }],
   },
   settings: {
     'import/resolver': {

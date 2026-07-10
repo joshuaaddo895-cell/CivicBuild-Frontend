@@ -1,31 +1,54 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { deletePortfolioImage, getMyPortfolio, type BackendPortfolioImage } from '@api/agencies';
 import { getPortfolioUploadErrorMessage, uploadAgencyPortfolioImage } from '@api/agencyPortfolio';
 import type { AgencyPortfolioScreenProps } from '@appTypes/navigation';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { EmptyState, ScreenHeader } from '@components/agency';
 import { ResendSuccessToast } from '@components/auth';
-import { useAgencyPortfolioStore } from '@store/agencyPortfolioStore';
-import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 import { validatePortfolioUpload } from '@utils/uploadValidation';
 
 export default function AgencyPortfolioScreen({ navigation }: AgencyPortfolioScreenProps) {
-  const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? 'buildstrong-ltd';
-
-  const allImages = useAgencyPortfolioStore((state) => state.imagesByAgencyId);
-  const addPortfolioImage = useAgencyPortfolioStore((state) => state.addPortfolioImage);
-  const portfolioImages = useMemo(() => allImages[agencyId] ?? [], [agencyId, allImages]);
-
+  const [portfolioImages, setPortfolioImages] = useState<BackendPortfolioImage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [successVisible, setSuccessVisible] = useState(false);
+
+  const loadPortfolio = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
+
+    const result = await getMyPortfolio();
+    if (!result.ok) {
+      setLoadError(result.error.message);
+      setIsLoading(false);
+      return;
+    }
+
+    setPortfolioImages(result.data);
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadPortfolio();
+  }, [loadPortfolio]);
 
   const handleAddImage = async () => {
     setErrorMessage('');
@@ -70,10 +93,7 @@ export default function AgencyPortfolioScreen({ navigation }: AgencyPortfolioScr
         return;
       }
 
-      addPortfolioImage(agencyId, {
-        imageId: uploadResult.data.imageId,
-        deliveryUrl: uploadResult.data.deliveryUrl,
-      });
+      await loadPortfolio();
       setSuccessVisible(true);
     } catch {
       setErrorMessage('Unable to upload portfolio image. Please try again.');
@@ -82,61 +102,128 @@ export default function AgencyPortfolioScreen({ navigation }: AgencyPortfolioScr
     }
   };
 
+  const handleDeleteImage = (imageId: string) => {
+    Alert.alert('Delete image', 'Remove this portfolio image?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setDeletingImageId(imageId);
+            const result = await deletePortfolioImage(imageId);
+            setDeletingImageId(null);
+
+            if (!result.ok) {
+              Alert.alert('Delete failed', result.error.message);
+              return;
+            }
+
+            setPortfolioImages((current) => current.filter((image) => image.imageId !== imageId));
+          })();
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Agency Portfolio" onBackPress={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.description}>
-          Showcase completed projects with JPG or PNG images up to 5MB each.
-        </Text>
-
-        <Pressable
-          onPress={handleAddImage}
-          disabled={isUploading}
-          style={({ pressed }) => [
-            styles.addButton,
-            pressed && !isUploading && styles.addButtonPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Add portfolio item"
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : loadError ? (
+        <View style={styles.centered}>
+          <Text style={styles.error}>{loadError}</Text>
+          <Pressable
+            onPress={() => void loadPortfolio()}
+            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading portfolio"
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          {isUploading ? (
-            <ActivityIndicator color={theme.colors.onPrimary} />
-          ) : (
-            <>
-              <MaterialIcons name="add-photo-alternate" size={22} color={theme.colors.onPrimary} />
-              <Text style={styles.addButtonText}>Add Portfolio Item</Text>
-            </>
-          )}
-        </Pressable>
-
-        {errorMessage ? (
-          <Text style={styles.error} accessibilityRole="alert">
-            {errorMessage}
+          <Text style={styles.description}>
+            Showcase completed projects with JPG or PNG images up to 5MB each.
           </Text>
-        ) : null}
 
-        {portfolioImages.length === 0 ? (
-          <EmptyState
-            icon="photo-library"
-            title="No portfolio images yet"
-            message="Upload project photos to help customers see your work."
-          />
-        ) : (
-          <View style={styles.grid}>
-            {portfolioImages.map((image) => (
-              <Image
-                key={image.imageId}
-                source={{ uri: image.deliveryUrl }}
-                style={styles.gridImage}
-                contentFit="cover"
-                accessibilityLabel="Portfolio image"
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+          <Pressable
+            onPress={handleAddImage}
+            disabled={isUploading}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && !isUploading && styles.addButtonPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Add portfolio item"
+          >
+            {isUploading ? (
+              <ActivityIndicator color={theme.colors.onPrimary} />
+            ) : (
+              <>
+                <MaterialIcons
+                  name="add-photo-alternate"
+                  size={22}
+                  color={theme.colors.onPrimary}
+                />
+                <Text style={styles.addButtonText}>Add Portfolio Item</Text>
+              </>
+            )}
+          </Pressable>
+
+          {errorMessage ? (
+            <Text style={styles.error} accessibilityRole="alert">
+              {errorMessage}
+            </Text>
+          ) : null}
+
+          {portfolioImages.length === 0 ? (
+            <EmptyState
+              icon="photo-library"
+              title="No portfolio images yet"
+              message="Upload project photos to help customers see your work."
+            />
+          ) : (
+            <View style={styles.grid}>
+              {portfolioImages.map((image) => (
+                <View key={image.imageId} style={styles.gridItem}>
+                  <Image
+                    source={{ uri: image.deliveryUrl }}
+                    style={styles.gridImage}
+                    contentFit="cover"
+                    accessibilityLabel="Portfolio image"
+                  />
+                  <Pressable
+                    onPress={() => handleDeleteImage(image.imageId)}
+                    disabled={deletingImageId === image.imageId}
+                    style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete portfolio image"
+                  >
+                    {deletingImageId === image.imageId ? (
+                      <ActivityIndicator size="small" color={theme.colors.onPrimary} />
+                    ) : (
+                      <MaterialIcons
+                        name="delete-outline"
+                        size={18}
+                        color={theme.colors.onPrimary}
+                      />
+                    )}
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      )}
 
       <View style={styles.toastContainer}>
         <ResendSuccessToast
@@ -153,6 +240,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.marginMobile,
+    gap: theme.spacing.sm,
   },
   scrollContent: {
     paddingHorizontal: theme.spacing.marginMobile,
@@ -186,17 +280,45 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.bodySm,
     color: theme.colors.error,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    textTransform: 'uppercase',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
   },
-  gridImage: {
+  gridItem: {
     width: '48%',
+    position: 'relative',
+  },
+  gridImage: {
+    width: '100%',
     aspectRatio: 4 / 3,
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surfaceContainerHigh,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: theme.spacing.xs,
+    right: theme.spacing.xs,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toastContainer: {
     position: 'absolute',
@@ -204,5 +326,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

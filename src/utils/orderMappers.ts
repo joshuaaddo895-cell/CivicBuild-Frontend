@@ -16,6 +16,7 @@ const DEFAULT_UNIT = 'unit';
 
 function mapCartItemToBackendItem(item: CartItem): BackendOrderItem {
   return {
+    productId: item.productId,
     productName: item.name.trim(),
     supplierName: (item.supplierName ?? DEFAULT_SUPPLIER_NAME).trim(),
     unitPrice: item.price,

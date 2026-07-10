@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,44 +11,69 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  createAgencyPost,
+  getMyAgencyPosts,
+  updateAgencyPost,
+  uploadAgencyProductImage,
+} from '@api/agencies';
 import type { AgencyPostType } from '@appTypes/agency';
 import type { AgencyPostFormScreenProps } from '@appTypes/navigation';
+import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { ProductImagePicker, ScreenHeader } from '@components/agency';
 import { AuthInput, AuthPrimaryButton } from '@components/auth';
-import { useAgencyPostsStore } from '@store/agencyPostsStore';
-import { useAuthStore } from '@store/authStore';
+import { AGENCY_POST_TYPE_LABELS } from '@constants/agencyPostLabels';
 import theme from '@theme/index';
+import { isLocalImageUri, mapBackendAgencyPost } from '@utils/agencyPostMappers';
 
 const POST_TYPES: { id: AgencyPostType; label: string }[] = [
-  { id: 'service', label: 'Service' },
-  { id: 'material', label: 'Material' },
-  { id: 'general', label: 'General Update' },
+  { id: 'service', label: AGENCY_POST_TYPE_LABELS.service },
+  { id: 'material', label: AGENCY_POST_TYPE_LABELS.material },
+  { id: 'general', label: AGENCY_POST_TYPE_LABELS.general },
 ];
 
 export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFormScreenProps) {
   const { postId } = route.params;
-  const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? 'buildstrong-ltd';
+  const isEditing = Boolean(postId);
 
-  const getPostsByAgencyId = useAgencyPostsStore((state) => state.getPostsByAgencyId);
-  const addPost = useAgencyPostsStore((state) => state.addPost);
-  const updatePost = useAgencyPostsStore((state) => state.updatePost);
-  const seedIfNeeded = useAgencyPostsStore((state) => state.seedIfNeeded);
-
-  const existingPost = useMemo(() => {
-    seedIfNeeded();
-    if (!postId) {
-      return undefined;
-    }
-    return getPostsByAgencyId(agencyId).find((post) => post.id === postId);
-  }, [agencyId, getPostsByAgencyId, postId, seedIfNeeded]);
-
-  const [type, setType] = useState<AgencyPostType>(existingPost?.type ?? 'general');
-  const [title, setTitle] = useState(existingPost?.title ?? '');
-  const [description, setDescription] = useState(existingPost?.description ?? '');
-  const [imageUri, setImageUri] = useState<string | null>(existingPost?.imageUri ?? null);
+  const [type, setType] = useState<AgencyPostType>('general');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!postId) {
+      return;
+    }
+
+    void (async () => {
+      setIsLoading(true);
+      setError('');
+
+      const result = await getMyAgencyPosts();
+      if (!result.ok) {
+        setError(result.error.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const existingPost = result.data.map(mapBackendAgencyPost).find((post) => post.id === postId);
+      if (!existingPost) {
+        setError('Post not found.');
+        setIsLoading(false);
+        return;
+      }
+
+      setType(existingPost.type);
+      setTitle(existingPost.title);
+      setDescription(existingPost.description);
+      setImageUri(existingPost.imageUri ?? null);
+      setIsLoading(false);
+    })();
+  }, [postId]);
 
   const handleSave = async () => {
     setError('');
@@ -65,17 +91,36 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
     setIsSaving(true);
 
     try {
-      const input = {
+      let resolvedImageUrl = imageUri;
+
+      if (isLocalImageUri(imageUri)) {
+        const localFile: LocalUploadFile = {
+          uri: imageUri!,
+          name: `post-${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
+        };
+        const uploadResult = await uploadAgencyProductImage(localFile);
+        if (!uploadResult.ok) {
+          setError(uploadResult.error.message);
+          return;
+        }
+        resolvedImageUrl = uploadResult.data.imageUrl;
+      }
+
+      const payload = {
         type,
         title: title.trim(),
         description: description.trim(),
-        imageUri,
+        imageUrl: resolvedImageUrl,
       };
 
-      if (existingPost) {
-        updatePost(existingPost.id, agencyId, input);
-      } else {
-        addPost(agencyId, input);
+      const result = isEditing
+        ? await updateAgencyPost(postId!, payload)
+        : await createAgencyPost(payload);
+
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
       }
 
       navigation.goBack();
@@ -89,67 +134,73 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
-        title={existingPost ? 'Edit Post' : 'Create Post'}
+        title={isEditing ? 'Edit Post' : 'Create Post'}
         onBackPress={() => navigation.goBack()}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+      {isLoading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
         >
-          <Text style={styles.fieldLabel}>Post Type</Text>
-          <View style={styles.chipRow}>
-            {POST_TYPES.map((entry) => (
-              <Pressable
-                key={entry.id}
-                onPress={() => setType(entry.id)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  type === entry.id && styles.chipActive,
-                  pressed && styles.pressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={entry.label}
-                accessibilityState={{ selected: type === entry.id }}
-              >
-                <Text style={[styles.chipText, type === entry.id && styles.chipTextActive]}>
-                  {entry.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.fieldLabel}>Post Type</Text>
+            <View style={styles.chipRow}>
+              {POST_TYPES.map((entry) => (
+                <Pressable
+                  key={entry.id}
+                  onPress={() => setType(entry.id)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    type === entry.id && styles.chipActive,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={entry.label}
+                  accessibilityState={{ selected: type === entry.id }}
+                >
+                  <Text style={[styles.chipText, type === entry.id && styles.chipTextActive]}>
+                    {entry.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
 
-          <AuthInput
-            label="Title"
-            placeholder="Post headline"
-            value={title}
-            onChangeText={setTitle}
-          />
+            <AuthInput
+              label="Title"
+              placeholder="Post headline"
+              value={title}
+              onChangeText={setTitle}
+            />
 
-          <AuthInput
-            label="Description"
-            placeholder="What would you like customers to know?"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-          />
+            <AuthInput
+              label="Description"
+              placeholder="What would you like customers to know?"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+            />
 
-          <ProductImagePicker imageUri={imageUri} onImageSelected={setImageUri} />
+            <ProductImagePicker imageUri={imageUri} onImageSelected={setImageUri} />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <AuthPrimaryButton
-            label={existingPost ? 'Save Changes' : 'Post'}
-            loading={isSaving}
-            onPress={handleSave}
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
+            <AuthPrimaryButton
+              label={isEditing ? 'Save Changes' : 'Post'}
+              loading={isSaving}
+              onPress={handleSave}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }
@@ -161,6 +212,11 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     padding: theme.spacing.marginMobile,

@@ -3,8 +3,8 @@ import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { UserWrittenReview } from '@constants/mockMyReviews';
-import { formatReviewDate } from '@constants/mockMyReviews';
+import { formatReviewDate } from '@api/reviews';
+import type { UserWrittenReview } from '@appTypes/reviewsApi';
 import theme from '@theme/index';
 
 interface MyReviewCardProps {

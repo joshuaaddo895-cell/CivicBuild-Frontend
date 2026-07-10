@@ -1,21 +1,21 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useEffect } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getAgency, getAgencyPortfolio, getAgencyPosts, type BackendAgency } from '@api/agencies';
+import { startThread } from '@api/messages';
+import type { AgencyPost } from '@appTypes/agency';
 import type { AgencyDetailScreenProps } from '@appTypes/navigation';
 import { AuthPrimaryButton } from '@components/auth';
 import { ProductGrid } from '@components/dashboard';
-import { getAgencyProfile } from '@constants/agencyProfiles';
-import { VERIFIED_CONSTRUCTION_AGENCIES } from '@constants/constructionAgencies';
-import { AGENCY_POST_TYPE_LABELS } from '@constants/mockAgencyPosts';
-import { useAgencyPostsStore } from '@store/agencyPostsStore';
+import { AGENCY_POST_TYPE_LABELS } from '@constants/agencyPostLabels';
 import { useCartStore } from '@store/cartStore';
 import { useProductStore } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
-import { findProductsByAgencyId } from '@utils/productHelpers';
+import { mapBackendAgencyPost } from '@utils/agencyPostMappers';
 
 function formatPostDate(isoDate: string): string {
   return new Date(isoDate).toLocaleDateString('en-GH', {
@@ -27,26 +27,84 @@ function formatPostDate(isoDate: string): string {
 
 export default function AgencyDetailScreen({ navigation, route }: AgencyDetailScreenProps) {
   const { agencyId } = route.params;
-  const agency = VERIFIED_CONSTRUCTION_AGENCIES.find((entry) => entry.id === agencyId);
-  const profile = getAgencyProfile(agencyId);
 
-  const initializeProducts = useProductStore((state) => state.initialize);
+  const [agency, setAgency] = useState<BackendAgency | null>(null);
+  const [posts, setPosts] = useState<AgencyPost[]>([]);
+  const [portfolioUrls, setPortfolioUrls] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isStartingThread, setIsStartingThread] = useState(false);
+
+  const fetchCatalog = useProductStore((state) => state.fetchCatalog);
   const products = useProductStore((state) => state.getProductsByAgencyId(agencyId));
-  const seedPosts = useAgencyPostsStore((state) => state.seedIfNeeded);
-  const posts = useAgencyPostsStore((state) => state.getPostsByAgencyId(agencyId));
-
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
   const addProduct = useCartStore((state) => state.addProduct);
 
+  const loadAgency = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const [agencyResult, postsResult, portfolioResult] = await Promise.all([
+      getAgency(agencyId),
+      getAgencyPosts(agencyId),
+      getAgencyPortfolio(agencyId),
+    ]);
+
+    if (!agencyResult.ok) {
+      setAgency(null);
+      setError(agencyResult.error.message);
+      setIsLoading(false);
+      return;
+    }
+
+    setAgency(agencyResult.data);
+    setPosts(postsResult.ok ? postsResult.data.map(mapBackendAgencyPost) : []);
+    setPortfolioUrls(
+      portfolioResult.ok ? portfolioResult.data.map((image) => image.deliveryUrl) : [],
+    );
+    setIsLoading(false);
+  }, [agencyId]);
+
   useEffect(() => {
-    initializeProducts();
-    seedPosts();
-  }, [initializeProducts, seedPosts]);
+    void fetchCatalog();
+    void loadAgency();
+  }, [fetchCatalog, loadAgency]);
 
-  const displayProducts = products.length > 0 ? products : findProductsByAgencyId(agencyId);
+  const handleMessagePress = async () => {
+    if (!agency || isStartingThread) {
+      return;
+    }
 
-  if (!agency || !profile) {
+    setIsStartingThread(true);
+
+    const result = await startThread({ agencyId: agency.id });
+
+    setIsStartingThread(false);
+
+    if (!result.ok) {
+      setError(result.error.message);
+      return;
+    }
+
+    navigation.getParent()?.navigate('Messages', {
+      screen: 'ConversationDetail',
+      params: {
+        threadId: result.data.id,
+        participantName: result.data.participantName,
+        participantLogoUri: result.data.participantLogoUri,
+      },
+    });
+  };
+
+  const handleAddProduct = (productId: string) => {
+    const product = products.find((entry) => entry.id === productId);
+    if (product) {
+      addProduct(product);
+    }
+  };
+
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -61,30 +119,36 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
           <Text style={styles.headerTitle}>Agency</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.missingState}>
-          <Text style={styles.missingText}>Agency not found.</Text>
+        <View style={styles.centeredState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       </SafeAreaView>
     );
   }
 
-  const handleMessagePress = () => {
-    navigation.getParent()?.navigate('Messages', {
-      screen: 'ConversationDetail',
-      params: {
-        threadId: `thread-${agency.id}`,
-        participantName: agency.name,
-        participantLogoUri: agency.logoUri,
-      },
-    });
-  };
+  if (!agency) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <MaterialIcons name="arrow-back" size={24} color={theme.colors.onSurface} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Agency</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.centeredState}>
+          <Text style={styles.missingText}>{error ?? 'Agency not found.'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const handleAddProduct = (productId: string) => {
-    const product = displayProducts.find((entry) => entry.id === productId);
-    if (product) {
-      addProduct(product);
-    }
-  };
+  const logoUri = agency.logoUrl ?? '';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -101,7 +165,7 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
           {agency.name}
         </Text>
         <Pressable
-          onPress={() => toggleSaved(agency.id, 'agency')}
+          onPress={() => void toggleSaved(agency.id, 'agency')}
           style={({ pressed }) => [styles.favoriteButton, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel={
@@ -120,12 +184,18 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.heroCard}>
-          <Image
-            source={{ uri: agency.logoUri }}
-            style={styles.logo}
-            contentFit="cover"
-            accessibilityLabel={`${agency.name} logo`}
-          />
+          {logoUri ? (
+            <Image
+              source={{ uri: logoUri }}
+              style={styles.logo}
+              contentFit="cover"
+              accessibilityLabel={`${agency.name} logo`}
+            />
+          ) : (
+            <View style={[styles.logo, styles.logoPlaceholder]}>
+              <MaterialIcons name="business" size={32} color={theme.colors.onSurfaceVariant} />
+            </View>
+          )}
           <View style={styles.heroTextBlock}>
             <View style={styles.nameRow}>
               <Text style={styles.name}>{agency.name}</Text>
@@ -133,36 +203,51 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
                 <MaterialIcons name="verified" size={20} color={theme.colors.primary} />
               ) : null}
             </View>
-            <Text style={styles.tagline}>{profile.tagline}</Text>
-            <Text style={styles.agencyBadge}>Construction Agency</Text>
+            {agency.tagline ? <Text style={styles.tagline}>{agency.tagline}</Text> : null}
+            <Text style={styles.agencyBadge}>{agency.category || 'Construction Agency'}</Text>
           </View>
         </View>
 
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
-          <Text style={styles.description}>{profile.description}</Text>
-          <Text style={styles.infoLine}>
-            <MaterialIcons name="location-on" size={16} color={theme.colors.primary} />{' '}
-            {profile.address}
-          </Text>
-          <Text style={styles.infoLine}>
-            <MaterialIcons name="phone" size={16} color={theme.colors.primary} /> {profile.phone}
-          </Text>
-          <Text style={styles.infoLine}>
-            <MaterialIcons name="schedule" size={16} color={theme.colors.primary} /> {profile.hours}
-          </Text>
+          {agency.description ? (
+            <Text style={styles.description}>{agency.description}</Text>
+          ) : (
+            <Text style={styles.emptyText}>No description available yet.</Text>
+          )}
+          {agency.address ? (
+            <Text style={styles.infoLine}>
+              <MaterialIcons name="location-on" size={16} color={theme.colors.primary} />{' '}
+              {agency.address}
+            </Text>
+          ) : null}
+          {agency.phone ? (
+            <Text style={styles.infoLine}>
+              <MaterialIcons name="phone" size={16} color={theme.colors.primary} /> {agency.phone}
+            </Text>
+          ) : null}
+          {agency.hours ? (
+            <Text style={styles.infoLine}>
+              <MaterialIcons name="schedule" size={16} color={theme.colors.primary} />{' '}
+              {agency.hours}
+            </Text>
+          ) : null}
         </View>
 
-        <Text style={styles.sectionTitle}>Services Offered</Text>
-        <View style={styles.servicesWrap}>
-          {profile.services.map((service) => (
-            <View key={service} style={styles.servicePill}>
-              <Text style={styles.serviceText}>{service}</Text>
+        {agency.services && agency.services.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Services Offered</Text>
+            <View style={styles.servicesWrap}>
+              {agency.services.map((service) => (
+                <View key={service} style={styles.servicePill}>
+                  <Text style={styles.serviceText}>{service}</Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </>
+        ) : null}
 
-        {profile.portfolioImageUris.length > 0 ? (
+        {portfolioUrls.length > 0 ? (
           <>
             <Text style={styles.sectionTitle}>Portfolio</Text>
             <ScrollView
@@ -170,7 +255,7 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
               showsHorizontalScrollIndicator={false}
               style={styles.portfolioRow}
             >
-              {profile.portfolioImageUris.map((uri) => (
+              {portfolioUrls.map((uri) => (
                 <Image
                   key={uri}
                   source={{ uri }}
@@ -184,14 +269,14 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
         ) : null}
 
         <Text style={styles.sectionTitle}>Materials & Products</Text>
-        {displayProducts.length === 0 ? (
+        {products.length === 0 ? (
           <Text style={styles.emptyText}>No listed products yet.</Text>
         ) : (
           <ProductGrid
-            products={displayProducts}
+            products={products}
             isFavorite={(id) => isSaved(id, 'product')}
             onProductPress={(id) => navigation.navigate('ProductDetail', { productId: id })}
-            onFavoritePress={(id) => toggleSaved(id, 'product')}
+            onFavoritePress={(id) => void toggleSaved(id, 'product')}
             onAddPress={handleAddProduct}
           />
         )}
@@ -222,7 +307,12 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
       </ScrollView>
 
       <View style={styles.footer}>
-        <AuthPrimaryButton label="Message Us" showArrow={false} onPress={handleMessagePress} />
+        <AuthPrimaryButton
+          label="Message Us"
+          showArrow={false}
+          loading={isStartingThread}
+          onPress={() => void handleMessagePress()}
+        />
       </View>
     </SafeAreaView>
   );
@@ -263,15 +353,17 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.75,
   },
-  missingState: {
+  centeredState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
   },
   missingText: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.onSurfaceVariant,
+    textAlign: 'center',
   },
   scrollContent: {
     padding: theme.spacing.marginMobile,
@@ -293,6 +385,10 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: theme.borderRadius.xl,
     backgroundColor: theme.colors.surfaceContainer,
+  },
+  logoPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroTextBlock: {
     flex: 1,

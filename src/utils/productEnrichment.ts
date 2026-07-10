@@ -1,6 +1,4 @@
 import type { Product } from '@appTypes/marketplace';
-import { VERIFIED_CONSTRUCTION_AGENCIES } from '@constants/constructionAgencies';
-import { ALL_SUPPLIERS } from '@constants/mockSuppliers';
 import { formatUnitSuffix } from '@utils/paystackAmount';
 
 const BRAND_PREFIXES = [
@@ -132,38 +130,6 @@ function buildDescription(product: Product, brand?: string): string {
   return `${brandText}${product.name} is a trusted ${product.category} product supplied for Ghanaian construction projects. It is commonly used by contractors and homeowners for reliable results on site. Sold ${product.unit ?? `per ${unitSuffix}`}, this listing is curated for the CivicBuild marketplace and ready for pickup or delivery coordination with the supplier.`;
 }
 
-function resolveAgencyId(supplierName?: string): string | undefined {
-  if (!supplierName) {
-    return undefined;
-  }
-
-  const normalized = supplierName.trim().toLowerCase();
-  const match = VERIFIED_CONSTRUCTION_AGENCIES.find(
-    (agency) =>
-      agency.name.toLowerCase() === normalized ||
-      normalized.includes(agency.name.toLowerCase()) ||
-      agency.name.toLowerCase().includes(normalized),
-  );
-
-  return match?.id;
-}
-
-function resolveSupplierId(supplierName?: string): string | undefined {
-  if (!supplierName) {
-    return undefined;
-  }
-
-  const normalized = supplierName.trim().toLowerCase();
-  const match = ALL_SUPPLIERS.find(
-    (supplier) =>
-      supplier.name.toLowerCase() === normalized ||
-      normalized.includes(supplier.name.toLowerCase()) ||
-      supplier.name.toLowerCase().includes(normalized),
-  );
-
-  return match?.id;
-}
-
 export function enrichProduct(product: Product): Product {
   const supplierName = product.supplierName ?? product.supplier_name;
   const brand = extractBrand(product.name, supplierName);
@@ -176,10 +142,8 @@ export function enrichProduct(product: Product): Product {
     size: extractSize(product.name),
     spec: extractSpec(product.category, product.name),
     highlight: buildHighlight(product),
-    description: buildDescription(product, brand),
+    description: product.description || buildDescription(product, brand),
     deliveryEstimate: inStock ? '2-3 days' : '5-7 days',
-    supplierId: resolveSupplierId(supplierName),
-    agencyId: product.agencyId ?? resolveAgencyId(supplierName),
     inStock,
   };
 }

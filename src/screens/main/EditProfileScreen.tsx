@@ -11,14 +11,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getProfile, updateProfile } from '@api/users';
+import { getProfile, updateProfile, uploadAvatar } from '@api/users';
 import type { EditProfileScreenProps } from '@appTypes/navigation';
+import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { AuthInput, AuthPrimaryButton } from '@components/auth';
 import ResendSuccessToast from '@components/auth/ResendSuccessToast';
 import ProfileAvatarEditor from '@components/profile/ProfileAvatarEditor';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
-import { formatUserDisplayName } from '@utils/mockAuth';
+import { isLocalImageUri } from '@utils/agencyPostMappers';
+import { formatUserDisplayName } from '@utils/userDisplay';
 import { getUserInitials } from '@utils/userInitials';
 
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
@@ -90,7 +92,23 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       };
 
       if (pendingPhotoUri) {
-        payload.profilePictureUrl = pendingPhotoUri;
+        if (isLocalImageUri(pendingPhotoUri)) {
+          const localFile: LocalUploadFile = {
+            uri: pendingPhotoUri,
+            name: `avatar-${Date.now()}.jpg`,
+            mimeType: 'image/jpeg',
+          };
+          const uploadResult = await uploadAvatar(localFile);
+
+          if (!uploadResult.ok) {
+            setErrorMessage(uploadResult.error.message);
+            return;
+          }
+
+          payload.profilePictureUrl = uploadResult.data.profilePictureUrl;
+        } else {
+          payload.profilePictureUrl = pendingPhotoUri;
+        }
       }
 
       const result = await updateProfile(payload, user);

@@ -3,11 +3,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  googleSignIn as googleSignInApi,
-  login as loginApi,
-  register as registerApi,
-} from '@api/auth';
+import { googleSignIn as googleSignInApi, register as registerApi } from '@api/auth';
 import type { RegisterScreenProps } from '@appTypes/navigation';
 import {
   AuthDecorBackground,
@@ -70,24 +66,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         return;
       }
 
-      const loginResult = await loginApi({
-        email: data.email,
-        password: data.password,
-      });
-
-      if (!loginResult.ok) {
-        setErrorMessage(
-          loginResult.error.message || 'Account created. Please sign in with your credentials.',
-        );
-        navigation.navigate('Login');
-        return;
-      }
-
-      await login(
-        loginResult.data.user,
-        loginResult.data.accessToken,
-        loginResult.data.refreshToken,
-      );
+      navigation.navigate('Login');
     } finally {
       setIsSubmitting(false);
     }
@@ -98,7 +77,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
     if (!isGoogleSignInConfigured()) {
       setErrorMessage(
-        'Google Sign-In is not configured yet. Add Google client IDs to .env.development.',
+        'Google Sign-In is not configured yet. Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to .env.development.',
       );
       return;
     }

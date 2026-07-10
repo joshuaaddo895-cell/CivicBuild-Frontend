@@ -1,7 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -13,52 +15,108 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  formatMessageTimestamp,
+  getThreadMessages,
+  markThreadRead,
+  sendMessage,
+  startThread,
+} from '@api/messages';
 import type { ChatMessage } from '@appTypes/messages';
 import type { ConversationDetailScreenProps } from '@appTypes/navigation';
-import {
-  CHAT_MESSAGES_BY_THREAD,
-  findMessageThread,
-  formatMessageTimestamp,
-} from '@constants/messagesData';
 import theme from '@theme/index';
 
 export default function ConversationDetailScreen({
   navigation,
   route,
 }: ConversationDetailScreenProps) {
-  const { threadId, participantName, participantLogoUri } = route.params;
-  const thread = findMessageThread(threadId);
-  const displayName = thread?.participantName ?? participantName ?? 'Conversation';
-  const displayLogoUri = thread?.participantLogoUri ?? participantLogoUri;
-  const initialMessages = CHAT_MESSAGES_BY_THREAD[threadId] ?? [];
+  const { threadId: routeThreadId, agencyId, participantName, participantLogoUri } = route.params;
 
-  const [messages, setMessages] = useState<ChatMessage[]>(
-    initialMessages.map((message) => ({ ...message, threadId })),
-  );
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(routeThreadId ?? null);
+  const [displayName, setDisplayName] = useState(participantName ?? 'Conversation');
+  const [displayLogoUri, setDisplayLogoUri] = useState(participantLogoUri);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()),
     [messages],
   );
 
-  const handleSend = () => {
-    const text = draft.trim();
-    if (!text) {
+  const loadConversation = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    let threadId = activeThreadId ?? routeThreadId ?? null;
+
+    if (!threadId && agencyId) {
+      const startResult = await startThread({ agencyId });
+
+      if (!startResult.ok) {
+        setError(startResult.error.message);
+        setIsLoading(false);
+        return;
+      }
+
+      threadId = startResult.data.id;
+      setActiveThreadId(threadId);
+      setDisplayName(startResult.data.participantName);
+      setDisplayLogoUri(startResult.data.participantLogoUri);
+    }
+
+    if (!threadId) {
+      setError('Conversation not found.');
+      setIsLoading(false);
       return;
     }
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: `local-${Date.now()}`,
-        threadId,
-        text,
-        sentAt: new Date().toISOString(),
-        isOutgoing: true,
-      },
+    const [messagesResult] = await Promise.all([
+      getThreadMessages(threadId),
+      markThreadRead(threadId),
     ]);
+
+    if (!messagesResult.ok) {
+      setError(messagesResult.error.message);
+      setMessages([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setMessages(messagesResult.data);
+    setIsLoading(false);
+  }, [activeThreadId, agencyId, routeThreadId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadConversation();
+    }, [loadConversation]),
+  );
+
+  const handleSend = async () => {
+    const text = draft.trim();
+    const threadId = activeThreadId ?? routeThreadId;
+
+    if (!text || !threadId || isSending) {
+      return;
+    }
+
+    setIsSending(true);
+    setError(null);
+
+    const result = await sendMessage(threadId, { text });
+
+    if (!result.ok) {
+      setError(result.error.message);
+      setIsSending(false);
+      return;
+    }
+
+    setMessages((current) => [...current, result.data]);
     setDraft('');
+    setIsSending(false);
   };
 
   return (
@@ -87,43 +145,55 @@ export default function ConversationDetailScreen({
         )}
       </View>
 
-      <FlatList
-        data={sortedMessages}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messagesContent}
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.messageRow,
-              item.isOutgoing ? styles.messageRowOutgoing : styles.messageRowIncoming,
-            ]}
-          >
+      {isLoading ? (
+        <View style={styles.centeredState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : error && sortedMessages.length === 0 ? (
+        <View style={styles.centeredState}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={sortedMessages}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.messagesContent}
+          renderItem={({ item }) => (
             <View
               style={[
-                styles.bubble,
-                item.isOutgoing ? styles.bubbleOutgoing : styles.bubbleIncoming,
+                styles.messageRow,
+                item.isOutgoing ? styles.messageRowOutgoing : styles.messageRowIncoming,
               ]}
             >
-              <Text
+              <View
                 style={[
-                  styles.messageText,
-                  item.isOutgoing ? styles.messageTextOutgoing : styles.messageTextIncoming,
+                  styles.bubble,
+                  item.isOutgoing ? styles.bubbleOutgoing : styles.bubbleIncoming,
                 ]}
               >
-                {item.text}
-              </Text>
-              <Text
-                style={[
-                  styles.messageTime,
-                  item.isOutgoing ? styles.messageTimeOutgoing : styles.messageTimeIncoming,
-                ]}
-              >
-                {formatMessageTimestamp(item.sentAt)}
-              </Text>
+                <Text
+                  style={[
+                    styles.messageText,
+                    item.isOutgoing ? styles.messageTextOutgoing : styles.messageTextIncoming,
+                  ]}
+                >
+                  {item.text}
+                </Text>
+                <Text
+                  style={[
+                    styles.messageTime,
+                    item.isOutgoing ? styles.messageTimeOutgoing : styles.messageTimeIncoming,
+                  ]}
+                >
+                  {formatMessageTimestamp(item.sentAt)}
+                </Text>
+              </View>
             </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      )}
+
+      {error && sortedMessages.length > 0 ? <Text style={styles.inlineError}>{error}</Text> : null}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.inputRow}>
@@ -134,15 +204,25 @@ export default function ConversationDetailScreen({
             placeholderTextColor={theme.colors.onSurfaceVariant}
             style={styles.input}
             multiline
+            editable={!isLoading && !isSending}
             accessibilityLabel="Message input"
           />
           <Pressable
-            onPress={handleSend}
-            style={({ pressed }) => [styles.sendButton, pressed && styles.sendButtonPressed]}
+            onPress={() => void handleSend()}
+            disabled={isLoading || isSending || !draft.trim()}
+            style={({ pressed }) => [
+              styles.sendButton,
+              pressed && styles.sendButtonPressed,
+              (isLoading || isSending || !draft.trim()) && styles.sendButtonDisabled,
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Send message"
           >
-            <MaterialIcons name="send" size={20} color={theme.colors.onPrimary} />
+            {isSending ? (
+              <ActivityIndicator color={theme.colors.onPrimary} size="small" />
+            ) : (
+              <MaterialIcons name="send" size={20} color={theme.colors.onPrimary} />
+            )}
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -186,10 +266,31 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: theme.colors.surfaceContainer,
   },
+  centeredState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  errorText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.error,
+    textAlign: 'center',
+  },
+  inlineError: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.error,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.marginMobile,
+    paddingBottom: theme.spacing.xs,
+  },
   messagesContent: {
     paddingHorizontal: theme.spacing.marginMobile,
     paddingVertical: theme.spacing.stackMd,
     gap: theme.spacing.sm,
+    flexGrow: 1,
   },
   messageRow: {
     flexDirection: 'row',
@@ -271,5 +372,8 @@ const styles = StyleSheet.create({
   },
   sendButtonPressed: {
     opacity: 0.85,
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
   },
 });

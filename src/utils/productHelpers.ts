@@ -1,14 +1,8 @@
 import type { Product, Supplier } from '@appTypes/marketplace';
-import { TRUSTED_SUPPLIERS } from '@constants/marketplaceData';
-import { MESSAGE_THREADS } from '@constants/messagesData';
 import { getPopularProducts } from '@store/productStore';
 
 export function findProductById(productId: string): Product | undefined {
   return getPopularProducts().find((product) => product.id === productId);
-}
-
-export function findSupplierById(supplierId: string): Supplier | undefined {
-  return TRUSTED_SUPPLIERS.find((supplier) => supplier.id === supplierId);
 }
 
 export function findProductsBySupplier(supplier: Supplier, limit = 8): Product[] {
@@ -49,43 +43,28 @@ export function findProductsByAgencyId(agencyId: string, limit = 8): Product[] {
 }
 
 export function resolveSupplierForProduct(product: Product): Supplier | undefined {
-  if (product.supplierId) {
-    return TRUSTED_SUPPLIERS.find((supplier) => supplier.id === product.supplierId);
-  }
-
-  const supplierName = product.supplierName ?? product.supplier_name;
-  if (!supplierName) {
+  if (!product.supplierId && !product.supplierName && !product.supplier_name) {
     return undefined;
   }
 
-  const normalized = supplierName.trim().toLowerCase();
-  return TRUSTED_SUPPLIERS.find(
-    (supplier) =>
-      supplier.name.toLowerCase() === normalized ||
-      normalized.includes(supplier.name.toLowerCase()) ||
-      supplier.name.toLowerCase().includes(normalized),
-  );
-}
-
-export function findMessageThreadIdForSupplier(supplierName: string): string | undefined {
-  const normalized = supplierName.trim().toLowerCase();
-  const thread = MESSAGE_THREADS.find(
-    (entry) => entry.participantName.toLowerCase() === normalized,
-  );
-  return thread?.id;
-}
-
-export function buildSupplierThreadId(supplierId: string): string {
-  return `thread-${supplierId}`;
+  const supplierName = product.supplierName ?? product.supplier_name ?? 'Supplier';
+  return {
+    id: product.supplierId ?? product.id,
+    name: supplierName,
+    logoUri: product.imageUri,
+    rating: 0,
+    reviewCount: 0,
+    distanceKm: 0,
+    verified: false,
+    categoryId: product.category,
+  };
 }
 
 export function resolveMessageNavigationForSupplier(supplier: Supplier): {
-  threadId: string;
   participantName: string;
   participantLogoUri: string;
 } {
   return {
-    threadId: findMessageThreadIdForSupplier(supplier.name) ?? buildSupplierThreadId(supplier.id),
     participantName: supplier.name,
     participantLogoUri: supplier.logoUri,
   };

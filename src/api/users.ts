@@ -1,6 +1,9 @@
 import type { ApiResponse, User } from '@appTypes/api';
-import { parseDisplayName } from '@utils/mockAuth';
+import type { LocalUploadFile } from '@appTypes/verificationDocuments';
+import { buildMultipartFormData } from '@utils/uploadValidation';
+import { parseDisplayName } from '@utils/userDisplay';
 
+import { toApiResult, type ApiResult } from './apiResult';
 import { mapBackendUserToUser, unwrapApiResponse } from './authTypes';
 import apiClient from './client';
 import { normalizeApiError, type NormalizedApiError } from './errors';
@@ -93,4 +96,18 @@ export async function updateProfilePicture(
   currentUser: User,
 ): Promise<UserProfileResult<User>> {
   return updateProfile({ profilePictureUrl }, currentUser);
+}
+
+export async function uploadAvatar(
+  file: LocalUploadFile,
+): Promise<ApiResult<{ profilePictureUrl: string }>> {
+  return toApiResult(
+    apiClient
+      .post<ApiResponse<{ profilePictureUrl: string }>>(
+        '/api/users/me/avatar',
+        buildMultipartFormData(file),
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      )
+      .then((response) => unwrapApiResponse(response.data)),
+  );
 }

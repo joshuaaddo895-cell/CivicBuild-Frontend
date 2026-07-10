@@ -78,11 +78,19 @@ export type AgencyStackParamList = {
   ChangePassword: undefined;
 };
 
+// ─── Delivery Stack ───────────────────────────────────────────────────────────
+export type DeliveryStackParamList = {
+  DeliveryDashboard: undefined;
+  Settings: undefined;
+  ChangePassword: undefined;
+};
+
 // ─── Messages Stack ─────────────────────────────────────────────────────────────
 export type MessagesStackParamList = {
   MessagesList: undefined;
   ConversationDetail: {
-    threadId: string;
+    threadId?: string;
+    agencyId?: string;
     participantName?: string;
     participantLogoUri?: string;
   };
@@ -97,7 +105,10 @@ export type ProfileStackParamList = {
 };
 
 export type MainTabParamList = {
-  Home: NavigatorScreenParams<HomeStackParamList> | NavigatorScreenParams<AgencyStackParamList>;
+  Home:
+    | NavigatorScreenParams<HomeStackParamList>
+    | NavigatorScreenParams<AgencyStackParamList>
+    | NavigatorScreenParams<DeliveryStackParamList>;
   Saved: undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList>;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
@@ -238,6 +249,14 @@ export type AgencyDetailScreenProps = CompositeScreenProps<
 
 export type AgencyDashboardScreenProps = CompositeScreenProps<
   NativeStackScreenProps<AgencyStackParamList, 'AgencyDashboard'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, 'Home'>,
+    NativeStackScreenProps<RootStackParamList>
+  >
+>;
+
+export type DeliveryDashboardScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<DeliveryStackParamList, 'DeliveryDashboard'>,
   CompositeScreenProps<
     BottomTabScreenProps<MainTabParamList, 'Home'>,
     NativeStackScreenProps<RootStackParamList>

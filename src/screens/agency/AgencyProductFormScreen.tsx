@@ -10,10 +10,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  createAgencyProduct,
+  updateAgencyProduct as updateAgencyProductApi,
+  uploadAgencyProductImage,
+} from '@api/agencies';
+import { mapBackendProduct } from '@api/catalog';
 import type { AgencyProductFormScreenProps } from '@appTypes/navigation';
+import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { ProductImagePicker, ScreenHeader } from '@components/agency';
 import { AuthInput, AuthPrimaryButton } from '@components/auth';
-import { PRODUCT_FORM_CATEGORIES, PRODUCT_FORM_UNITS } from '@constants/agencyProfiles';
+import { PRODUCT_FORM_CATEGORIES, PRODUCT_FORM_UNITS } from '@constants/productFormOptions';
 import { useAuthStore } from '@store/authStore';
 import { useProductStore } from '@store/productStore';
 import theme from '@theme/index';
@@ -27,11 +34,12 @@ export default function AgencyProductFormScreen({
 }: AgencyProductFormScreenProps) {
   const { productId } = route.params;
   const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? 'buildstrong-ltd';
+  const agencyId = managedAgencyId ?? '';
 
   const getProductsByAgencyId = useProductStore((state) => state.getProductsByAgencyId);
   const addAgencyProduct = useProductStore((state) => state.addAgencyProduct);
   const updateAgencyProduct = useProductStore((state) => state.updateAgencyProduct);
+  const fetchCatalog = useProductStore((state) => state.fetchCatalog);
 
   const existingProduct = useMemo(() => {
     if (!productId) {
@@ -78,22 +86,49 @@ export default function AgencyProductFormScreen({
     setIsSaving(true);
 
     try {
-      const input = {
+      let resolvedImageUrl = imageUri;
+
+      if (imageUri.startsWith('file://') || imageUri.startsWith('content://')) {
+        const localFile: LocalUploadFile = {
+          uri: imageUri,
+          name: `product-${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
+        };
+        const uploadResult = await uploadAgencyProductImage(localFile);
+        if (!uploadResult.ok) {
+          setError(uploadResult.error.message);
+          return;
+        }
+        resolvedImageUrl = uploadResult.data.imageUrl;
+      }
+
+      const payload = {
         name: name.trim(),
         category,
         price: parsedPrice,
         unit,
         stockQuantity: parsedStock,
-        imageUri,
+        imageUrl: resolvedImageUrl,
         description: description.trim() || `${name.trim()} — listed by your agency on CivicBuild.`,
       };
 
       if (existingProduct) {
-        updateAgencyProduct(existingProduct.id, agencyId, input);
+        const result = await updateAgencyProductApi(existingProduct.id, payload);
+        if (!result.ok) {
+          setError(result.error.message);
+          return;
+        }
+        updateAgencyProduct(mapBackendProduct(result.data));
       } else {
-        addAgencyProduct(agencyId, input);
+        const result = await createAgencyProduct(payload);
+        if (!result.ok) {
+          setError(result.error.message);
+          return;
+        }
+        addAgencyProduct(mapBackendProduct(result.data));
       }
 
+      await fetchCatalog();
       navigation.goBack();
     } catch {
       setError('Unable to save product. Please try again.');

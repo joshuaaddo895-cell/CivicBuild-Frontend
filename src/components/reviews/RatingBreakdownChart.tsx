@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { RatingBreakdownRow } from '@constants/mockReviews';
+import type { RatingBreakdownRow } from '@appTypes/reviewsApi';
 import theme from '@theme/index';
 
 interface RatingBreakdownChartProps {

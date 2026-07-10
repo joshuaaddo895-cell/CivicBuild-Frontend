@@ -31,6 +31,7 @@ export interface OrderConfirmationDetails {
 // ─── Backend DTOs (Spring Boot / Postman contract) ────────────────────────────
 
 export interface BackendOrderItem {
+  productId?: string;
   productName: string;
   supplierName: string;
   unitPrice: number;

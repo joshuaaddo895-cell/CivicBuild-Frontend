@@ -1,25 +1,21 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getReviewSummary } from '@api/reviews';
 import type { ProductDetailScreenProps } from '@appTypes/navigation';
+import type { ReviewSummary } from '@appTypes/reviewsApi';
 import { AuthPrimaryButton } from '@components/auth';
 import ResendSuccessToast from '@components/auth/ResendSuccessToast';
 import { getCategoryTheme } from '@constants/categoryTheme';
-import { getMockReviewSummary } from '@constants/mockReviews';
 import { useCartStore } from '@store/cartStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 import { formatPriceWithUnit, formatUnitSuffix } from '@utils/paystackAmount';
 import { enrichProduct, usesNumericQuantityInput } from '@utils/productEnrichment';
-import {
-  findMessageThreadIdForSupplier,
-  findProductById,
-  resolveMessageNavigationForSupplier,
-  resolveSupplierForProduct,
-} from '@utils/productHelpers';
+import { findProductById, resolveSupplierForProduct } from '@utils/productHelpers';
 
 function FloatingIconButton({
   icon,
@@ -126,10 +122,20 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
 
   const categoryTheme = product ? getCategoryTheme(product.category) : null;
   const supplier = product ? resolveSupplierForProduct(product) : undefined;
-  const productReviewSummary = useMemo(
-    () => getMockReviewSummary('product', productId),
-    [productId],
-  );
+  const [productReviewSummary, setProductReviewSummary] = useState<ReviewSummary>({
+    averageRating: 0,
+    totalCount: 0,
+    breakdown: [],
+  });
+
+  useEffect(() => {
+    void (async () => {
+      const result = await getReviewSummary('product', productId);
+      if (result.ok) {
+        setProductReviewSummary(result.data);
+      }
+    })();
+  }, [productId]);
   const unitSuffix = product ? formatUnitSuffix(product.unit) : null;
   const useNumericInput = product ? usesNumericQuantityInput(product.unit) : false;
   const inStock = product?.inStock ?? product?.in_stock ?? true;
@@ -160,20 +166,7 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
 
     const supplier = resolveSupplierForProduct(product);
     if (supplier) {
-      navigation.getParent()?.navigate('Messages', {
-        screen: 'ConversationDetail',
-        params: resolveMessageNavigationForSupplier(supplier),
-      });
-      return;
-    }
-
-    const supplierName = product.supplierName ?? product.supplier_name;
-    const threadId = supplierName ? findMessageThreadIdForSupplier(supplierName) : undefined;
-    if (threadId && supplierName) {
-      navigation.getParent()?.navigate('Messages', {
-        screen: 'ConversationDetail',
-        params: { threadId, participantName: supplierName },
-      });
+      navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
       return;
     }
 

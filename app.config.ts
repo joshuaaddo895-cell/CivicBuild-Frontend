@@ -4,6 +4,7 @@ export default ({ config }: ConfigContext) => ({
   ...config,
   name: 'CivicBuild',
   slug: 'civicbuild',
+  owner: process.env.EXPO_PUBLIC_EXPO_OWNER,
   version: '1.0.0',
   orientation: 'portrait',
   icon: './src/assets/images/icon.png',

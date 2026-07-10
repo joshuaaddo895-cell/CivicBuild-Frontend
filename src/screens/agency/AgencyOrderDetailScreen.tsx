@@ -1,33 +1,74 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getAgencyOrder, getOrderStatusLabel, updateAgencyOrderStatus } from '@api/agencyOrders';
+import type { AgencyOrder, OrderStatus } from '@appTypes/agency';
 import type { AgencyOrderDetailScreenProps } from '@appTypes/navigation';
 import { ScreenHeader } from '@components/agency';
 import { AuthPrimaryButton } from '@components/auth';
-import { getOrderById, getOrderStatusLabel } from '@constants/mockAgencyOrders';
 import theme from '@theme/index';
 import { formatCedis, formatUnitSuffix } from '@utils/paystackAmount';
+
+const ORDER_STATUSES: OrderStatus[] = ['pending', 'processing', 'delivered', 'cancelled'];
 
 export default function AgencyOrderDetailScreen({
   navigation,
   route,
 }: AgencyOrderDetailScreenProps) {
-  const order = useMemo(() => getOrderById(route.params.orderId), [route.params.orderId]);
+  const { orderId } = route.params;
 
-  if (!order) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Order Detail" onBackPress={() => navigation.goBack()} />
-        <View style={styles.missingState}>
-          <Text style={styles.missingText}>Order not found.</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const [order, setOrder] = useState<AgencyOrder | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [statusError, setStatusError] = useState('');
+
+  const loadOrder = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
+
+    const result = await getAgencyOrder(orderId);
+    if (!result.ok) {
+      setLoadError(result.error.message);
+      setOrder(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setOrder(result.data);
+    setIsLoading(false);
+  }, [orderId]);
+
+  useEffect(() => {
+    void loadOrder();
+  }, [loadOrder]);
+
+  const handleStatusChange = async (status: OrderStatus) => {
+    if (!order || order.status === status) {
+      return;
+    }
+
+    setStatusError('');
+    setIsUpdatingStatus(true);
+
+    const result = await updateAgencyOrderStatus(orderId, status);
+    setIsUpdatingStatus(false);
+
+    if (!result.ok) {
+      setStatusError(result.error.message);
+      return;
+    }
+
+    setOrder(result.data);
+  };
 
   const handleMessageCustomer = () => {
+    if (!order) {
+      return;
+    }
+
     navigation.getParent()?.navigate('Messages', {
       screen: 'ConversationDetail',
       params: {
@@ -36,6 +77,36 @@ export default function AgencyOrderDetailScreen({
       },
     });
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader title="Order Detail" onBackPress={() => navigation.goBack()} />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError || !order) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader title="Order Detail" onBackPress={() => navigation.goBack()} />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{loadError || 'Order not found.'}</Text>
+          <Pressable
+            onPress={() => void loadOrder()}
+            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading order"
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -47,6 +118,35 @@ export default function AgencyOrderDetailScreen({
           <Text style={styles.customerName}>{order.customerName}</Text>
           <Text style={styles.status}>{getOrderStatusLabel(order.status)}</Text>
           <Text style={styles.total}>{formatCedis(order.totalAmount)}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Update Status</Text>
+          <View style={styles.chipRow}>
+            {ORDER_STATUSES.map((status) => (
+              <Pressable
+                key={status}
+                onPress={() => void handleStatusChange(status)}
+                disabled={isUpdatingStatus}
+                style={({ pressed }) => [
+                  styles.chip,
+                  order.status === status && styles.chipActive,
+                  pressed && !isUpdatingStatus && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Set status to ${getOrderStatusLabel(status)}`}
+                accessibilityState={{ selected: order.status === status }}
+              >
+                <Text style={[styles.chipText, order.status === status && styles.chipTextActive]}>
+                  {getOrderStatusLabel(status)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {isUpdatingStatus ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          ) : null}
+          {statusError ? <Text style={styles.errorText}>{statusError}</Text> : null}
         </View>
 
         <View style={styles.section}>
@@ -99,20 +199,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.marginMobile,
+    gap: theme.spacing.sm,
+  },
   scrollContent: {
     padding: theme.spacing.marginMobile,
     paddingBottom: theme.spacing.stackLg,
     gap: theme.spacing.stackMd,
-  },
-  missingState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  missingText: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.fontSize.bodyMd,
-    color: theme.colors.onSurfaceVariant,
   },
   summaryCard: {
     padding: theme.spacing.lg,
@@ -152,6 +249,32 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.headline,
     fontSize: theme.typography.fontSize.headlineSm,
     color: theme.colors.onSurface,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+  },
+  chip: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.outlineVariant,
+    backgroundColor: theme.colors.surface,
+  },
+  chipActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  chipText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.onSurfaceVariant,
+  },
+  chipTextActive: {
+    color: theme.colors.onPrimaryContainer,
+    fontWeight: '600',
   },
   itemRow: {
     flexDirection: 'row',
@@ -205,5 +328,26 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.bodySm,
     color: theme.colors.onSurfaceVariant,
+  },
+  errorText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.error,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    textTransform: 'uppercase',
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

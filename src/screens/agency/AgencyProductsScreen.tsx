@@ -1,8 +1,9 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { deleteAgencyProduct as deleteAgencyProductApi } from '@api/agencies';
 import type { AgencyProductsScreenProps } from '@appTypes/navigation';
 import { EmptyState, ScreenHeader } from '@components/agency';
 import { ProductGrid } from '@components/dashboard';
@@ -12,10 +13,15 @@ import theme from '@theme/index';
 
 export default function AgencyProductsScreen({ navigation }: AgencyProductsScreenProps) {
   const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? 'buildstrong-ltd';
+  const agencyId = managedAgencyId ?? '';
 
   const agencyProducts = useProductStore((state) => state.getProductsByAgencyId(agencyId));
-  const deleteAgencyProduct = useProductStore((state) => state.deleteAgencyProduct);
+  const removeAgencyProduct = useProductStore((state) => state.removeAgencyProduct);
+  const fetchCatalog = useProductStore((state) => state.fetchCatalog);
+
+  useEffect(() => {
+    void fetchCatalog();
+  }, [fetchCatalog]);
 
   const handleDelete = (productId: string, productName: string) => {
     Alert.alert(
@@ -26,7 +32,16 @@ export default function AgencyProductsScreen({ navigation }: AgencyProductsScree
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteAgencyProduct(productId, agencyId),
+          onPress: () => {
+            void (async () => {
+              const result = await deleteAgencyProductApi(productId);
+              if (result.ok) {
+                removeAgencyProduct(productId);
+                return;
+              }
+              Alert.alert('Delete failed', result.error.message);
+            })();
+          },
         },
       ],
     );

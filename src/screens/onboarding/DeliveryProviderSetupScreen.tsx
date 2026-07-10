@@ -1,14 +1,21 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { setupDeliveryProvider } from '@api/delivery';
+import { completeOnboarding as completeOnboardingApi } from '@api/onboarding';
+import { uploadAvatar } from '@api/users';
 import type { DeliveryProviderSetupScreenProps } from '@appTypes/navigation';
-import {
-  areRequiredVerificationDocumentsUploaded,
-  setVerificationDocument,
-  type VerificationDocumentsState,
-} from '@appTypes/verification';
-import type { VerificationDocumentType } from '@appTypes/verificationDocuments';
+import { setVerificationDocument, type VerificationDocumentsState } from '@appTypes/verification';
+import type { LocalUploadFile, VerificationDocumentType } from '@appTypes/verificationDocuments';
 import { AuthDecorBackground, AuthErrorBanner, AuthInput } from '@components/auth';
 import { ConstructionAgencySelect, ProfilePhotoPicker } from '@components/delivery';
 import {
@@ -19,19 +26,17 @@ import {
 import { DELIVERY_VERIFICATION_UPLOADS } from '@constants/verificationFieldsConfig';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
-import { formatUserDisplayName } from '@utils/mockAuth';
+import { isLocalImageUri } from '@utils/agencyPostMappers';
+import { formatUserDisplayName } from '@utils/userDisplay';
 
 export default function DeliveryProviderSetupScreen({
   navigation,
 }: DeliveryProviderSetupScreenProps) {
   const user = useAuthStore((state) => state.user);
-  const submitDeliveryProviderSetup = useAuthStore((state) => state.submitDeliveryProviderSetup);
+  const syncOnboardingFromServer = useAuthStore((state) => state.syncOnboardingFromServer);
+  const applyServerOnboarding = useAuthStore((state) => state.applyServerOnboarding);
 
   const defaultFullName = useMemo(() => formatUserDisplayName(user), [user]);
-  const requiredDocumentTypes = useMemo<VerificationDocumentType[]>(
-    () => ['GOVERNMENT_ID', 'PROFESSIONAL_LICENSE'],
-    [],
-  );
 
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [fullName, setFullName] = useState(defaultFullName);
@@ -55,7 +60,54 @@ export default function DeliveryProviderSetupScreen({
     [navigation],
   );
 
-  const handleSubmit = async () => {
+  const submitSetup = async (agencyId: string | null) => {
+    let profileImageUrl: string | undefined;
+
+    if (profileImageUri && isLocalImageUri(profileImageUri)) {
+      const localFile: LocalUploadFile = {
+        uri: profileImageUri,
+        name: `avatar-${Date.now()}.jpg`,
+        mimeType: 'image/jpeg',
+      };
+      const uploadResult = await uploadAvatar(localFile);
+
+      if (!uploadResult.ok) {
+        throw new Error(uploadResult.error.message);
+      }
+
+      profileImageUrl = uploadResult.data.profilePictureUrl;
+    } else if (profileImageUri) {
+      profileImageUrl = profileImageUri;
+    }
+
+    const setupResult = await setupDeliveryProvider({
+      fullName: fullName.trim() || defaultFullName,
+      constructionAgencyId: agencyId,
+      vehicleInfo: vehicleInfo.trim() || undefined,
+      profileImageUrl,
+    });
+
+    if (!setupResult.ok) {
+      throw new Error(setupResult.error.message);
+    }
+
+    await syncOnboardingFromServer();
+
+    if (!agencyId) {
+      const completeResult = await completeOnboardingApi();
+
+      if (!completeResult.ok) {
+        throw new Error(completeResult.error.message);
+      }
+
+      applyServerOnboarding(completeResult.data);
+      return;
+    }
+
+    navigation.navigate('PendingCompanyConfirmation');
+  };
+
+  const handleContinue = async () => {
     setSubmitError('');
 
     if (!constructionAgencyId) {
@@ -63,28 +115,29 @@ export default function DeliveryProviderSetupScreen({
       return;
     }
 
-    if (!vehicleInfo.trim()) {
-      setSubmitError('Please enter your vehicle information.');
-      return;
-    }
-
-    if (!areRequiredVerificationDocumentsUploaded(documents, requiredDocumentTypes)) {
-      setSubmitError('Upload your government ID and license documents before submitting.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      submitDeliveryProviderSetup({
-        profileImageUri,
-        fullName: fullName.trim() || defaultFullName,
-        constructionAgencyId,
-        vehicleInfo: vehicleInfo.trim(),
-      });
-      navigation.navigate('PendingCompanyConfirmation');
-    } catch {
-      setSubmitError('Unable to submit your profile. Please try again.');
+      await submitSetup(constructionAgencyId);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : 'Unable to complete setup. Please try again.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    setSubmitError('');
+    setIsSubmitting(true);
+
+    try {
+      await submitSetup(null);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : 'Unable to complete setup. Please try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -105,7 +158,7 @@ export default function DeliveryProviderSetupScreen({
           <View style={styles.inner}>
             <OnboardingHeader
               title="Delivery Provider Setup"
-              subtitle="Complete your profile, upload verification documents, and link to a construction company."
+              subtitle="Complete your profile and link to a construction company. Documents are optional — you can add them later."
             />
 
             {submitError ? <AuthErrorBanner message={submitError} /> : null}
@@ -135,6 +188,7 @@ export default function DeliveryProviderSetupScreen({
               <ConstructionAgencySelect
                 selectedAgencyId={constructionAgencyId}
                 onSelect={setConstructionAgencyId}
+                isLoading={isSubmitting}
               />
 
               {DELIVERY_VERIFICATION_UPLOADS.map((uploadConfig) => (
@@ -148,10 +202,20 @@ export default function DeliveryProviderSetupScreen({
               ))}
 
               <OnboardingContinueButton
-                label="Submit for Company Review"
+                label="Continue"
                 loading={isSubmitting}
-                onPress={handleSubmit}
+                onPress={() => void handleContinue()}
               />
+
+              <Pressable
+                onPress={() => void handleSkip()}
+                disabled={isSubmitting}
+                style={styles.skipButton}
+                accessibilityRole="button"
+                accessibilityLabel="Skip for now"
+              >
+                <Text style={styles.skipText}>Skip for now</Text>
+              </Pressable>
             </View>
           </View>
         </ScrollView>
@@ -181,5 +245,14 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: theme.spacing.stackMd,
+  },
+  skipButton: {
+    alignSelf: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
+  skipText: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.primary,
   },
 });

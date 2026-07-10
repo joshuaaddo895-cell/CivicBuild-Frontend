@@ -1,22 +1,22 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getAgency } from '@api/agencies';
+import { getMyReviews, getMyReviewsSummary } from '@api/reviews';
 import type { ProfileScreenProps } from '@appTypes/navigation';
 import UserAvatarBadge from '@components/dashboard/UserAvatarBadge';
-import { findConstructionAgencyById } from '@constants/constructionAgencies';
-import { getMyReviewsSummary, MOCK_USER_REVIEWS } from '@constants/mockMyReviews';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
-import { formatUserDisplayName } from '@utils/mockAuth';
 import {
   getAccountTypeLabel,
   getVerificationStatusColor,
   getVerificationStatusLabel,
 } from '@utils/roleLabels';
 import { confirmSignOut, performSignOut } from '@utils/session';
+import { formatUserDisplayName } from '@utils/userDisplay';
 import { getUserInitials } from '@utils/userInitials';
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
@@ -25,14 +25,54 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const verificationStatus = useAuthStore((state) => state.verificationStatus);
   const deliveryProviderProfile = useAuthStore((state) => state.deliveryProviderProfile);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [reviewsSummary, setReviewsSummary] = useState({ totalCount: 0, averageRatingGiven: 0 });
+  const [isLoadingReviews, setIsLoadingReviews] = useState(true);
+  const [associatedAgency, setAssociatedAgency] = useState<{
+    name: string;
+    logoUri: string;
+  } | null>(null);
 
   const displayName = deliveryProviderProfile?.fullName?.trim() || formatUserDisplayName(user);
   const profileImageUri = user?.avatar ?? deliveryProviderProfile?.profileImageUri ?? null;
   const userInitials = getUserInitials(user, displayName);
-  const associatedAgency = findConstructionAgencyById(
-    deliveryProviderProfile?.constructionAgencyId ?? null,
-  );
-  const myReviewsSummary = getMyReviewsSummary(MOCK_USER_REVIEWS);
+
+  useEffect(() => {
+    void (async () => {
+      setIsLoadingReviews(true);
+
+      const reviewsResult = await getMyReviews();
+
+      if (reviewsResult.ok) {
+        setReviewsSummary(getMyReviewsSummary(reviewsResult.data));
+      } else {
+        setReviewsSummary({ totalCount: 0, averageRatingGiven: 0 });
+      }
+
+      setIsLoadingReviews(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    const agencyId = deliveryProviderProfile?.constructionAgencyId;
+
+    if (!agencyId) {
+      setAssociatedAgency(null);
+      return;
+    }
+
+    void (async () => {
+      const result = await getAgency(agencyId);
+
+      if (result.ok) {
+        setAssociatedAgency({
+          name: result.data.name,
+          logoUri: result.data.logoUrl ?? '',
+        });
+      } else {
+        setAssociatedAgency(null);
+      }
+    })();
+  }, [deliveryProviderProfile?.constructionAgencyId]);
 
   const menuItems = [
     {
@@ -43,7 +83,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     {
       icon: 'star-outline' as const,
       label: 'My Reviews / Ratings',
-      subtitle: `${myReviewsSummary.totalCount} reviews · ${myReviewsSummary.averageRatingGiven.toFixed(1)} avg`,
+      subtitle: isLoadingReviews
+        ? 'Loading...'
+        : `${reviewsSummary.totalCount} reviews · ${reviewsSummary.averageRatingGiven.toFixed(1)} avg`,
       onPress: () => navigation.navigate('MyReviews'),
     },
     {
@@ -81,7 +123,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             <Text style={styles.roleText}>{getAccountTypeLabel(accountType)}</Text>
           </View>
 
-          {accountType === 'construction' ? (
+          {accountType === 'construction' && verificationStatus === 'verified' ? (
             <View
               style={[
                 styles.statusBadge,
@@ -89,7 +131,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               ]}
             >
               <MaterialIcons
-                name={verificationStatus === 'verified' ? 'verified' : 'hourglass-top'}
+                name="verified"
                 size={16}
                 color={getVerificationStatusColor(verificationStatus)}
               />
@@ -106,12 +148,18 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           {accountType === 'delivery' && associatedAgency ? (
             <View style={styles.companyCard}>
-              <Image
-                source={{ uri: associatedAgency.logoUri }}
-                style={styles.companyLogo}
-                contentFit="cover"
-                accessibilityLabel={`${associatedAgency.name} logo`}
-              />
+              {associatedAgency.logoUri ? (
+                <Image
+                  source={{ uri: associatedAgency.logoUri }}
+                  style={styles.companyLogo}
+                  contentFit="cover"
+                  accessibilityLabel={`${associatedAgency.name} logo`}
+                />
+              ) : (
+                <View style={[styles.companyLogo, styles.companyLogoPlaceholder]}>
+                  <MaterialIcons name="business" size={20} color={theme.colors.onSurfaceVariant} />
+                </View>
+              )}
               <View style={styles.companyInfo}>
                 <Text style={styles.companyLabel}>Associated Company</Text>
                 <Text style={styles.companyName}>{associatedAgency.name}</Text>
@@ -256,6 +304,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: theme.borderRadius.md,
+  },
+  companyLogoPlaceholder: {
+    backgroundColor: theme.colors.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   companyInfo: {
     flex: 1,

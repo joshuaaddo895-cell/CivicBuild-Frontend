@@ -1,6 +1,6 @@
 import type { User } from '@appTypes/api';
 
-import { formatUserDisplayName, parseDisplayName } from './mockAuth';
+import { formatUserDisplayName, parseDisplayName } from './userDisplay';
 
 /**
  * Derives avatar initials from a user's name.

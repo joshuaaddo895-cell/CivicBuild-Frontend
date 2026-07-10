@@ -2,12 +2,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { MockReview } from '@constants/mockReviews';
-import { formatReviewDate } from '@constants/mockReviews';
+import { formatReviewDate } from '@api/reviews';
+import type { Review } from '@appTypes/reviewsApi';
 import theme from '@theme/index';
 
 interface ReviewCardProps {
-  review: MockReview;
+  review: Review;
 }
 
 function StarRow({ rating }: { rating: number }) {

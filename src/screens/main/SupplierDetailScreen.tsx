@@ -1,21 +1,20 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getSupplier } from '@api/catalog';
+import type { Supplier } from '@appTypes/marketplace';
 import type { SupplierDetailScreenProps } from '@appTypes/navigation';
 import { AuthPrimaryButton } from '@components/auth';
 import { ProductGrid } from '@components/dashboard';
 import { getSupplierCategoryLabel, getSupplierProfile } from '@constants/supplierProfiles';
 import { useCartStore } from '@store/cartStore';
+import { useProductStore } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
-import {
-  findProductsBySupplier,
-  findSupplierById,
-  resolveMessageNavigationForSupplier,
-} from '@utils/productHelpers';
+import { findProductsBySupplier } from '@utils/productHelpers';
 
 function InfoRow({
   icon,
@@ -41,16 +40,53 @@ function InfoRow({
 
 export default function SupplierDetailScreen({ navigation, route }: SupplierDetailScreenProps) {
   const { supplierId } = route.params;
-  const supplier = findSupplierById(supplierId);
+  const [supplier, setSupplier] = useState<Supplier | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const fetchCatalog = useProductStore((state) => state.fetchCatalog);
+  const catalogProducts = useProductStore((state) => state.catalogProducts);
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
   const addProduct = useCartStore((state) => state.addProduct);
 
+  useEffect(() => {
+    void fetchCatalog();
+  }, [fetchCatalog]);
+
+  useEffect(() => {
+    void (async () => {
+      setIsLoading(true);
+      setError('');
+      const result = await getSupplier(supplierId);
+      if (result.ok) {
+        setSupplier(result.data);
+      } else {
+        setError(result.error.message);
+        setSupplier(null);
+      }
+      setIsLoading(false);
+    })();
+  }, [supplierId]);
+
   const profile = useMemo(() => (supplier ? getSupplierProfile(supplier) : null), [supplier]);
   const categoryLabel = supplier ? getSupplierCategoryLabel(supplier) : '';
-  const products = useMemo(() => (supplier ? findProductsBySupplier(supplier) : []), [supplier]);
+  const products = useMemo(
+    () => (supplier ? findProductsBySupplier(supplier) : []),
+    [supplier, catalogProducts],
+  );
 
-  if (!supplier || !profile) {
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !supplier || !profile) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -66,18 +102,14 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.missingState}>
-          <Text style={styles.missingTitle}>Supplier not found</Text>
+          <Text style={styles.missingTitle}>{error || 'Supplier not found'}</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   const handleMessagePress = () => {
-    const messageParams = resolveMessageNavigationForSupplier(supplier);
-    navigation.getParent()?.navigate('Messages', {
-      screen: 'ConversationDetail',
-      params: messageParams,
-    });
+    navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
   };
 
   const handleReviewsPress = () => {
@@ -397,6 +429,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.lg,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   missingTitle: {
     fontFamily: theme.typography.fontFamily.headline,

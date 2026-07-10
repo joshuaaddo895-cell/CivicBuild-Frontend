@@ -1,93 +1,97 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useEffect, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  getAgencyPersonnel,
+  getMyAgency,
+  getMyAgencyPosts,
+  getMyPortfolio,
+  type BackendAgency,
+  type BackendPersonnel,
+  type BackendPortfolioImage,
+} from '@api/agencies';
+import { formatOrderItemSummary, getAgencyOrders, getOrderStatusLabel } from '@api/agencyOrders';
+import type { AgencyOrder, AgencyPost } from '@appTypes/agency';
 import type { AgencyDashboardScreenProps } from '@appTypes/navigation';
 import { DashboardPreviewCard } from '@components/agency';
 import { DashboardHeader, ProductGrid, SectionHeader } from '@components/dashboard';
-import { findConstructionAgencyById } from '@constants/constructionAgencies';
-import { formatOrderItemSummary, getOrdersByAgencyId } from '@constants/mockAgencyOrders';
-import { useAgencyPortfolioStore } from '@store/agencyPortfolioStore';
-import { useAgencyPostsStore } from '@store/agencyPostsStore';
 import { useAuthStore } from '@store/authStore';
-import { useDeliveryPersonnelStore } from '@store/deliveryPersonnelStore';
 import { useProductStore } from '@store/productStore';
 import theme from '@theme/index';
+import { mapBackendAgencyPost } from '@utils/agencyPostMappers';
 import { getUserInitials } from '@utils/userInitials';
 
 export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScreenProps) {
   const user = useAuthStore((state) => state.user);
   const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? 'buildstrong-ltd';
+  const agencyId = managedAgencyId ?? '';
 
-  const initializeProducts = useProductStore((state) => state.initialize);
-  const extraProducts = useProductStore((state) => state.extraProducts);
-  const removedProductIds = useProductStore((state) => state.removedProductIds);
-  const productOverrides = useProductStore((state) => state.productOverrides);
+  const fetchCatalog = useProductStore((state) => state.fetchCatalog);
+  const catalogProducts = useProductStore((state) => state.catalogProducts);
   const getProductsByAgencyId = useProductStore((state) => state.getProductsByAgencyId);
   const agencyProducts = useMemo(
     () => getProductsByAgencyId(agencyId),
-    [agencyId, extraProducts, getProductsByAgencyId, productOverrides, removedProductIds],
+    [agencyId, catalogProducts, getProductsByAgencyId],
   );
 
-  const seedPosts = useAgencyPostsStore((state) => state.seedIfNeeded);
-  const allPosts = useAgencyPostsStore((state) => state.posts);
-  const agencyPosts = useMemo(
-    () =>
-      allPosts
-        .filter((post) => post.agencyId === agencyId)
-        .sort(
-          (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-        ),
-    [agencyId, allPosts],
+  const [agency, setAgency] = useState<BackendAgency | null>(null);
+  const [portfolioImages, setPortfolioImages] = useState<BackendPortfolioImage[]>([]);
+  const [agencyPosts, setAgencyPosts] = useState<AgencyPost[]>([]);
+  const [orders, setOrders] = useState<AgencyOrder[]>([]);
+  const [personnel, setPersonnel] = useState<BackendPersonnel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  const loadDashboard = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
+
+    void fetchCatalog();
+
+    const [agencyResult, postsResult, portfolioResult, ordersResult, personnelResult] =
+      await Promise.all([
+        getMyAgency(),
+        getMyAgencyPosts(),
+        getMyPortfolio(),
+        getAgencyOrders(),
+        getAgencyPersonnel(),
+      ]);
+
+    if (!agencyResult.ok) {
+      setLoadError(agencyResult.error.message);
+      setIsLoading(false);
+      return;
+    }
+
+    setAgency(agencyResult.data);
+    setAgencyPosts(
+      postsResult.ok
+        ? postsResult.data
+            .map(mapBackendAgencyPost)
+            .sort(
+              (left, right) =>
+                new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+            )
+        : [],
+    );
+    setPortfolioImages(portfolioResult.ok ? portfolioResult.data : []);
+    setOrders(ordersResult.ok ? ordersResult.data : []);
+    setPersonnel(personnelResult.ok ? personnelResult.data : []);
+    setLoadError('');
+    setIsLoading(false);
+  }, [fetchCatalog]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadDashboard();
+    }, [loadDashboard]),
   );
 
-  const seedPersonnel = useDeliveryPersonnelStore((state) => state.seedIfNeeded);
-  const allPersonnel = useDeliveryPersonnelStore((state) => state.personnel);
-  const pendingPersonnel = useMemo(
-    () =>
-      allPersonnel
-        .filter(
-          (entry) => entry.constructionAgencyId === agencyId && entry.approvalStatus === 'pending',
-        )
-        .sort(
-          (left, right) =>
-            new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime(),
-        ),
-    [agencyId, allPersonnel],
-  );
-  const approvedPersonnel = useMemo(
-    () =>
-      allPersonnel
-        .filter(
-          (entry) => entry.constructionAgencyId === agencyId && entry.approvalStatus === 'approved',
-        )
-        .sort(
-          (left, right) =>
-            new Date(right.handledAt ?? right.submittedAt).getTime() -
-            new Date(left.handledAt ?? left.submittedAt).getTime(),
-        ),
-    [agencyId, allPersonnel],
-  );
-
-  const allPortfolioImages = useAgencyPortfolioStore((state) => state.imagesByAgencyId);
-  const portfolioImages = useMemo(
-    () => allPortfolioImages[agencyId] ?? [],
-    [agencyId, allPortfolioImages],
-  );
-
-  const agency = findConstructionAgencyById(agencyId);
-  const orders = useMemo(() => getOrdersByAgencyId(agencyId), [agencyId]);
   const userInitials = getUserInitials(user);
   const userAvatarUri = user?.avatar ?? null;
-
-  useEffect(() => {
-    initializeProducts();
-    seedPosts();
-    seedPersonnel();
-  }, [initializeProducts, seedPosts, seedPersonnel]);
-
   const latestOrder = orders[0];
 
   return (
@@ -100,128 +104,150 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
         onNotificationsPress={() => navigation.navigate('Notifications')}
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <Text style={styles.greeting} accessibilityRole="header">
-            Agency Dashboard
-          </Text>
-          <Text style={styles.agencyName}>{agency?.name ?? 'Your Construction Agency'}</Text>
-          <Text style={styles.heroSubtitle}>
-            Manage products, orders, announcements, and delivery personnel.
-          </Text>
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
+      ) : loadError ? (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{loadError}</Text>
+          <Pressable
+            onPress={() => void loadDashboard()}
+            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading dashboard"
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.hero}>
+            <Text style={styles.greeting} accessibilityRole="header">
+              Agency Dashboard
+            </Text>
+            <Text style={styles.agencyName}>{agency?.name ?? 'Your Construction Agency'}</Text>
+            <Text style={styles.heroSubtitle}>
+              Manage products, orders, announcements, and delivery personnel.
+            </Text>
+          </View>
 
-        <View style={styles.section}>
-          <SectionHeader
-            title="Portfolio"
-            actionLabel="Manage"
-            onActionPress={() => navigation.navigate('AgencyPortfolio')}
-          />
-          {portfolioImages.length === 0 ? (
-            <Pressable
-              onPress={() => navigation.navigate('AgencyPortfolio')}
-              accessibilityRole="button"
-              accessibilityLabel="Add portfolio item"
-            >
+          <View style={styles.section}>
+            <SectionHeader
+              title="Portfolio"
+              actionLabel="Manage"
+              onActionPress={() => navigation.navigate('AgencyPortfolio')}
+            />
+            {portfolioImages.length === 0 ? (
+              <Pressable
+                onPress={() => navigation.navigate('AgencyPortfolio')}
+                accessibilityRole="button"
+                accessibilityLabel="Add portfolio item"
+              >
+                <Text style={styles.previewEmpty}>
+                  No portfolio images yet — tap to add your first project photo.
+                </Text>
+              </Pressable>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.portfolioRow}
+              >
+                {portfolioImages.slice(0, 6).map((image) => (
+                  <Image
+                    key={image.imageId}
+                    source={{ uri: image.deliveryUrl }}
+                    style={styles.portfolioThumb}
+                    contentFit="cover"
+                    accessibilityLabel="Portfolio image"
+                  />
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <SectionHeader
+              title="My Products & Materials"
+              actionLabel="See All"
+              onActionPress={() => navigation.navigate('AgencyProducts')}
+            />
+            {agencyProducts.length === 0 ? (
+              <Text style={styles.previewEmpty}>You haven&apos;t listed any products yet.</Text>
+            ) : (
+              <ProductGrid
+                products={agencyProducts.slice(0, 4)}
+                onProductPress={(productId) =>
+                  navigation.navigate('AgencyProductForm', { productId })
+                }
+              />
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <SectionHeader
+              title="Recent Orders"
+              actionLabel="See All"
+              onActionPress={() => navigation.navigate('AgencyOrders')}
+            />
+            {latestOrder ? (
+              <DashboardPreviewCard
+                icon="receipt-long"
+                title={latestOrder.customerName}
+                subtitle={formatOrderItemSummary(latestOrder.items.length, latestOrder.totalAmount)}
+                countLabel={getOrderStatusLabel(latestOrder.status)}
+                onPress={() =>
+                  navigation.navigate('AgencyOrderDetail', { orderId: latestOrder.id })
+                }
+              />
+            ) : (
+              <Text style={styles.previewEmpty}>No customer orders yet.</Text>
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <SectionHeader
+              title="Posts & Announcements"
+              actionLabel="See All"
+              onActionPress={() => navigation.navigate('AgencyPosts')}
+            />
+            {agencyPosts[0] ? (
+              <DashboardPreviewCard
+                icon="campaign"
+                title={agencyPosts[0].title}
+                subtitle={agencyPosts[0].description}
+                onPress={() => navigation.navigate('AgencyPosts')}
+              />
+            ) : (
               <Text style={styles.previewEmpty}>
-                No portfolio images yet — tap to add your first project photo.
+                No posts yet — share an update with customers.
               </Text>
-            </Pressable>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.portfolioRow}
-            >
-              {portfolioImages.slice(0, 6).map((image) => (
-                <Image
-                  key={image.imageId}
-                  source={{ uri: image.deliveryUrl }}
-                  style={styles.portfolioThumb}
-                  contentFit="cover"
-                  accessibilityLabel="Portfolio image"
-                />
-              ))}
-            </ScrollView>
-          )}
-        </View>
+            )}
+          </View>
 
-        <View style={styles.section}>
-          <SectionHeader
-            title="My Products & Materials"
-            actionLabel="See All"
-            onActionPress={() => navigation.navigate('AgencyProducts')}
-          />
-          {agencyProducts.length === 0 ? (
-            <Text style={styles.previewEmpty}>You haven&apos;t listed any products yet.</Text>
-          ) : (
-            <ProductGrid
-              products={agencyProducts.slice(0, 4)}
-              onProductPress={(productId) =>
-                navigation.navigate('AgencyProductForm', { productId })
+          <View style={styles.section}>
+            <SectionHeader
+              title="My Delivery Personnel"
+              actionLabel="See All"
+              onActionPress={() => navigation.navigate('AgencyPersonnel')}
+            />
+            <DashboardPreviewCard
+              icon="local-shipping"
+              title={`${personnel.length} delivery personnel`}
+              subtitle={
+                personnel.length > 0
+                  ? 'Linked delivery providers for your agency'
+                  : 'No delivery personnel linked yet'
               }
+              onPress={() => navigation.navigate('AgencyPersonnel')}
             />
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader
-            title="Recent Orders"
-            actionLabel="See All"
-            onActionPress={() => navigation.navigate('AgencyOrders')}
-          />
-          {latestOrder ? (
-            <DashboardPreviewCard
-              icon="receipt-long"
-              title={latestOrder.customerName}
-              subtitle={formatOrderItemSummary(latestOrder.items.length, latestOrder.totalAmount)}
-              countLabel={latestOrder.status}
-              onPress={() => navigation.navigate('AgencyOrderDetail', { orderId: latestOrder.id })}
-            />
-          ) : (
-            <Text style={styles.previewEmpty}>No customer orders yet.</Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader
-            title="Posts & Announcements"
-            actionLabel="See All"
-            onActionPress={() => navigation.navigate('AgencyPosts')}
-          />
-          {agencyPosts[0] ? (
-            <DashboardPreviewCard
-              icon="campaign"
-              title={agencyPosts[0].title}
-              subtitle={agencyPosts[0].description}
-              onPress={() => navigation.navigate('AgencyPosts')}
-            />
-          ) : (
-            <Text style={styles.previewEmpty}>No posts yet — share an update with customers.</Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader
-            title="My Delivery Personnel"
-            actionLabel="See All"
-            onActionPress={() => navigation.navigate('AgencyPersonnel')}
-          />
-          <DashboardPreviewCard
-            icon="local-shipping"
-            title={`${approvedPersonnel.length} approved personnel`}
-            subtitle={
-              pendingPersonnel.length > 0
-                ? `${pendingPersonnel.length} pending approval in Notifications`
-                : 'No pending requests'
-            }
-            countLabel={
-              pendingPersonnel.length > 0 ? `${pendingPersonnel.length} pending` : undefined
-            }
-            onPress={() => navigation.navigate('AgencyPersonnel')}
-          />
-        </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -230,6 +256,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.marginMobile,
+    gap: theme.spacing.sm,
   },
   scrollContent: {
     paddingHorizontal: theme.spacing.marginMobile,
@@ -275,5 +308,26 @@ const styles = StyleSheet.create({
     height: 90,
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surfaceContainerHigh,
+  },
+  errorText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.error,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  retryText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    textTransform: 'uppercase',
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });
