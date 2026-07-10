@@ -33,7 +33,7 @@ const POST_TYPES: { id: AgencyPostType; label: string }[] = [
 ];
 
 export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFormScreenProps) {
-  const { postId } = route.params;
+  const { postId } = route.params ?? {};
   const isEditing = Boolean(postId);
 
   const [type, setType] = useState<AgencyPostType>('general');

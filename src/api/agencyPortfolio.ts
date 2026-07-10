@@ -1,5 +1,6 @@
 import type { ApiResponse } from '@appTypes/api';
 import type { AgencyPortfolioUploadData, LocalUploadFile } from '@appTypes/verificationDocuments';
+import { getMultipartUploadConfig } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 
 import { unwrapApiResponse } from './authTypes';
@@ -10,11 +11,7 @@ export type AgencyPortfolioApiResult<T> =
   { ok: true; data: T } | { ok: false; error: NormalizedApiError };
 
 function multipartConfig() {
-  return {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  };
+  return getMultipartUploadConfig();
 }
 
 export function getPortfolioUploadErrorMessage(error: NormalizedApiError): string {

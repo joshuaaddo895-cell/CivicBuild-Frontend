@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -15,52 +15,75 @@ import {
   updateAgencyProduct as updateAgencyProductApi,
   uploadAgencyProductImage,
 } from '@api/agencies';
-import { mapBackendProduct } from '@api/catalog';
+import { getProduct, mapBackendProduct } from '@api/catalog';
 import type { AgencyProductFormScreenProps } from '@appTypes/navigation';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { ProductImagePicker, ScreenHeader } from '@components/agency';
 import { AuthInput, AuthPrimaryButton } from '@components/auth';
 import { PRODUCT_FORM_CATEGORIES, PRODUCT_FORM_UNITS } from '@constants/productFormOptions';
-import { useAuthStore } from '@store/authStore';
 import { useProductStore } from '@store/productStore';
 import theme from '@theme/index';
+import { normalizeProductUnit } from '@utils/multipartUpload';
 
 const DEFAULT_IMAGE =
   'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80';
+
+function stripPerPrefix(unit?: string): string {
+  if (!unit) {
+    return PRODUCT_FORM_UNITS[0];
+  }
+
+  return unit.replace(/^per\s+/i, '').trim() || PRODUCT_FORM_UNITS[0];
+}
 
 export default function AgencyProductFormScreen({
   navigation,
   route,
 }: AgencyProductFormScreenProps) {
-  const { productId } = route.params;
-  const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? '';
+  const { productId } = route.params ?? {};
 
-  const getProductsByAgencyId = useProductStore((state) => state.getProductsByAgencyId);
   const addAgencyProduct = useProductStore((state) => state.addAgencyProduct);
   const updateAgencyProduct = useProductStore((state) => state.updateAgencyProduct);
   const fetchCatalog = useProductStore((state) => state.fetchCatalog);
 
-  const existingProduct = useMemo(() => {
-    if (!productId) {
-      return undefined;
-    }
-    return getProductsByAgencyId(agencyId).find((product) => product.id === productId);
-  }, [agencyId, getProductsByAgencyId, productId]);
-
-  const [name, setName] = useState(existingProduct?.name ?? '');
-  const [category, setCategory] = useState(existingProduct?.category ?? PRODUCT_FORM_CATEGORIES[0]);
-  const [price, setPrice] = useState(existingProduct ? String(existingProduct.price) : '');
-  const [unit, setUnit] = useState(
-    existingProduct?.unit?.replace(/^per\s+/i, '') ?? PRODUCT_FORM_UNITS[0],
-  );
-  const [stockQuantity, setStockQuantity] = useState(
-    existingProduct?.stockQuantity != null ? String(existingProduct.stockQuantity) : '10',
-  );
-  const [imageUri, setImageUri] = useState(existingProduct?.imageUri ?? DEFAULT_IMAGE);
-  const [description, setDescription] = useState(existingProduct?.description ?? '');
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState<string>(PRODUCT_FORM_CATEGORIES[0]);
+  const [price, setPrice] = useState('');
+  const [unit, setUnit] = useState<string>(PRODUCT_FORM_UNITS[0]);
+  const [stockQuantity, setStockQuantity] = useState('10');
+  const [imageUri, setImageUri] = useState(DEFAULT_IMAGE);
+  const [description, setDescription] = useState('');
   const [error, setError] = useState('');
+  const [isLoadingProduct, setIsLoadingProduct] = useState(Boolean(productId));
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!productId) {
+      return;
+    }
+
+    void (async () => {
+      setIsLoadingProduct(true);
+      setError('');
+
+      const result = await getProduct(productId);
+      if (!result.ok) {
+        setError(result.error.message);
+        setIsLoadingProduct(false);
+        return;
+      }
+
+      const product = result.data;
+      setName(product.name);
+      setCategory(product.category);
+      setPrice(String(product.price));
+      setUnit(stripPerPrefix(product.unit));
+      setStockQuantity(product.stockQuantity != null ? String(product.stockQuantity) : '10');
+      setImageUri(product.imageUri ?? DEFAULT_IMAGE);
+      setDescription(product.description ?? '');
+      setIsLoadingProduct(false);
+    })();
+  }, [productId]);
 
   const handleSave = async () => {
     setError('');
@@ -106,14 +129,14 @@ export default function AgencyProductFormScreen({
         name: name.trim(),
         category,
         price: parsedPrice,
-        unit,
+        unit: normalizeProductUnit(unit),
         stockQuantity: parsedStock,
         imageUrl: resolvedImageUrl,
         description: description.trim() || `${name.trim()} — listed by your agency on CivicBuild.`,
       };
 
-      if (existingProduct) {
-        const result = await updateAgencyProductApi(existingProduct.id, payload);
+      if (productId) {
+        const result = await updateAgencyProductApi(productId, payload);
         if (!result.ok) {
           setError(result.error.message);
           return;
@@ -130,17 +153,35 @@ export default function AgencyProductFormScreen({
 
       await fetchCatalog();
       navigation.goBack();
-    } catch {
-      setError('Unable to save product. Please try again.');
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : 'Unable to save product. Please try again.',
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
+  if (isLoadingProduct) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader
+          title={productId ? 'Edit Product' : 'Add Product'}
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.loadingState}>
+          <Text style={styles.loadingText}>Loading product…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
-        title={existingProduct ? 'Edit Product' : 'Add Product'}
+        title={productId ? 'Edit Product' : 'Add Product'}
         onBackPress={() => navigation.goBack()}
       />
 
@@ -246,6 +287,17 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.lg,
+  },
+  loadingText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.onSurfaceVariant,
   },
   scrollContent: {
     padding: theme.spacing.marginMobile,

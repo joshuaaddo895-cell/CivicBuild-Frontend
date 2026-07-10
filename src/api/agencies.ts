@@ -2,6 +2,7 @@ import type { AgencyPostType, AgencyProfileDetails } from '@appTypes/agency';
 import type { ApiResponse } from '@appTypes/api';
 import type { BackendProduct } from '@appTypes/catalog';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
+import { getMultipartUploadConfig } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 
 import { toApiResult, type ApiResult } from './apiResult';
@@ -143,7 +144,7 @@ export async function uploadAgencyProductImage(
       .post<ApiResponse<{ imageUrl: string }>>(
         '/api/agencies/me/products/upload-image',
         buildMultipartFormData(file),
-        { headers: { 'Content-Type': 'multipart/form-data' } },
+        getMultipartUploadConfig(),
       )
       .then((response) => unwrapApiResponse(response.data)),
   );

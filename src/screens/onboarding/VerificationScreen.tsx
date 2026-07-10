@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { createAgency } from '@api/agencies';
+import { createAgency, getMyAgency, patchMyAgency } from '@api/agencies';
 import { completeOnboarding as completeOnboardingApi } from '@api/onboarding';
 import type { VerificationScreenProps } from '@appTypes/navigation';
 import {
@@ -64,14 +64,28 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
       useAuthStore.getState().setVerificationStatus('pending');
     }
 
+    await useAuthStore.getState().syncOnboardingFromServer();
+
     if (accountType === 'construction' && formValues.businessName.trim()) {
-      const agencyResult = await createAgency({
+      const agencyPayload = {
         name: formValues.businessName.trim(),
         category: formValues.category || 'general-contracting',
-      });
+      };
 
-      if (!agencyResult.ok) {
-        throw new Error(agencyResult.error.message);
+      const existingAgency = await getMyAgency();
+
+      if (existingAgency.ok) {
+        const patchResult = await patchMyAgency(agencyPayload);
+        if (!patchResult.ok) {
+          throw new Error(patchResult.error.message);
+        }
+      } else if (existingAgency.error.statusCode === 404) {
+        const agencyResult = await createAgency(agencyPayload);
+        if (!agencyResult.ok) {
+          throw new Error(agencyResult.error.message);
+        }
+      } else {
+        throw new Error(existingAgency.error.message);
       }
     }
 
@@ -81,6 +95,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     }
 
     useAuthStore.getState().applyServerOnboarding(completeResult.data);
+    await useAuthStore.getState().syncOnboardingFromServer();
   }, [accountType, formValues.businessName, formValues.category, formValues.documents]);
 
   const handleContinue = useCallback(async () => {

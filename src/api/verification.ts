@@ -5,6 +5,7 @@ import type {
   VerificationDocumentUrlData,
   LocalUploadFile,
 } from '@appTypes/verificationDocuments';
+import { getMultipartUploadConfig } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 
 import { unwrapApiResponse } from './authTypes';
@@ -15,11 +16,7 @@ export type VerificationApiResult<T> =
   { ok: true; data: T } | { ok: false; error: NormalizedApiError };
 
 function multipartConfig() {
-  return {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  };
+  return getMultipartUploadConfig();
 }
 
 export function getVerificationUploadErrorMessage(error: NormalizedApiError): string {

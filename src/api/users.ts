@@ -1,5 +1,6 @@
 import type { ApiResponse, User } from '@appTypes/api';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
+import { getMultipartUploadConfig } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 import { parseDisplayName } from '@utils/userDisplay';
 
@@ -106,7 +107,7 @@ export async function uploadAvatar(
       .post<ApiResponse<{ profilePictureUrl: string }>>(
         '/api/users/me/avatar',
         buildMultipartFormData(file),
-        { headers: { 'Content-Type': 'multipart/form-data' } },
+        getMultipartUploadConfig(),
       )
       .then((response) => unwrapApiResponse(response.data)),
   );

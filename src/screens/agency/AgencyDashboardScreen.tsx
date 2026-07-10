@@ -1,6 +1,6 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,7 +14,9 @@ import {
   type BackendPortfolioImage,
 } from '@api/agencies';
 import { formatOrderItemSummary, getAgencyOrders, getOrderStatusLabel } from '@api/agencyOrders';
+import { getProducts } from '@api/catalog';
 import type { AgencyOrder, AgencyPost } from '@appTypes/agency';
+import type { Product } from '@appTypes/marketplace';
 import type { AgencyDashboardScreenProps } from '@appTypes/navigation';
 import { DashboardPreviewCard } from '@components/agency';
 import { DashboardHeader, ProductGrid, SectionHeader } from '@components/dashboard';
@@ -26,18 +28,13 @@ import { getUserInitials } from '@utils/userInitials';
 
 export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScreenProps) {
   const user = useAuthStore((state) => state.user);
-  const managedAgencyId = useAuthStore((state) => state.managedAgencyId);
-  const agencyId = managedAgencyId ?? '';
+  const syncOnboardingFromServer = useAuthStore((state) => state.syncOnboardingFromServer);
 
   const fetchCatalog = useProductStore((state) => state.fetchCatalog);
-  const catalogProducts = useProductStore((state) => state.catalogProducts);
   const getProductsByAgencyId = useProductStore((state) => state.getProductsByAgencyId);
-  const agencyProducts = useMemo(
-    () => getProductsByAgencyId(agencyId),
-    [agencyId, catalogProducts, getProductsByAgencyId],
-  );
 
   const [agency, setAgency] = useState<BackendAgency | null>(null);
+  const [agencyProducts, setAgencyProducts] = useState<Product[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<BackendPortfolioImage[]>([]);
   const [agencyPosts, setAgencyPosts] = useState<AgencyPost[]>([]);
   const [orders, setOrders] = useState<AgencyOrder[]>([]);
@@ -49,40 +46,61 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
     setIsLoading(true);
     setLoadError('');
 
-    void fetchCatalog();
+    try {
+      await syncOnboardingFromServer();
+      void fetchCatalog();
 
-    const [agencyResult, postsResult, portfolioResult, ordersResult, personnelResult] =
-      await Promise.all([
-        getMyAgency(),
-        getMyAgencyPosts(),
-        getMyPortfolio(),
-        getAgencyOrders(),
-        getAgencyPersonnel(),
-      ]);
+      const [agencyResult, postsResult, portfolioResult, ordersResult, personnelResult] =
+        await Promise.all([
+          getMyAgency(),
+          getMyAgencyPosts(),
+          getMyPortfolio(),
+          getAgencyOrders(),
+          getAgencyPersonnel(),
+        ]);
 
-    if (!agencyResult.ok) {
-      setLoadError(agencyResult.error.message);
+      if (!agencyResult.ok) {
+        setAgency(null);
+        setAgencyProducts([]);
+        setLoadError(
+          agencyResult.error.statusCode === 404
+            ? 'No agency is linked to your account yet. Complete agency verification or log out and sign in again.'
+            : agencyResult.error.message,
+        );
+        return;
+      }
+
+      setAgency(agencyResult.data);
+
+      const productsResult = await getProducts({ agencyId: agencyResult.data.id, limit: 50 });
+      if (productsResult.ok) {
+        setAgencyProducts(productsResult.data.items);
+      } else {
+        setAgencyProducts(getProductsByAgencyId(agencyResult.data.id));
+      }
+
+      setAgencyPosts(
+        postsResult.ok
+          ? postsResult.data
+              .map(mapBackendAgencyPost)
+              .sort(
+                (left, right) =>
+                  new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+              )
+          : [],
+      );
+      setPortfolioImages(portfolioResult.ok ? portfolioResult.data : []);
+      setOrders(ordersResult.ok ? ordersResult.data : []);
+      setPersonnel(personnelResult.ok ? personnelResult.data : []);
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to load dashboard.');
+      setAgency(null);
+      setAgencyProducts([]);
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    setAgency(agencyResult.data);
-    setAgencyPosts(
-      postsResult.ok
-        ? postsResult.data
-            .map(mapBackendAgencyPost)
-            .sort(
-              (left, right) =>
-                new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-            )
-        : [],
-    );
-    setPortfolioImages(portfolioResult.ok ? portfolioResult.data : []);
-    setOrders(ordersResult.ok ? ordersResult.data : []);
-    setPersonnel(personnelResult.ok ? personnelResult.data : []);
-    setLoadError('');
-    setIsLoading(false);
-  }, [fetchCatalog]);
+  }, [fetchCatalog, getProductsByAgencyId, syncOnboardingFromServer]);
 
   useFocusEffect(
     useCallback(() => {
