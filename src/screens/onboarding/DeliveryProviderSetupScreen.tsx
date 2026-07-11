@@ -10,12 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { setupDeliveryProvider } from '@api/delivery';
+import { setupDeliveryProvider, updateMyDeliveryProvider } from '@api/delivery';
 import { completeOnboarding as completeOnboardingApi } from '@api/onboarding';
 import { uploadAvatar } from '@api/users';
 import type { DeliveryProviderSetupScreenProps } from '@appTypes/navigation';
 import { setVerificationDocument, type VerificationDocumentsState } from '@appTypes/verification';
-import type { LocalUploadFile, VerificationDocumentType } from '@appTypes/verificationDocuments';
+import type { VerificationDocumentType } from '@appTypes/verificationDocuments';
 import { AuthDecorBackground, AuthErrorBanner, AuthInput } from '@components/auth';
 import { ConstructionAgencySelect, ProfilePhotoPicker } from '@components/delivery';
 import {
@@ -27,6 +27,7 @@ import { DELIVERY_VERIFICATION_UPLOADS } from '@constants/verificationFieldsConf
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 import { isLocalImageUri } from '@utils/agencyPostMappers';
+import { buildImageUploadFile, validateImageUpload } from '@utils/uploadValidation';
 import { formatUserDisplayName } from '@utils/userDisplay';
 
 export default function DeliveryProviderSetupScreen({
@@ -35,6 +36,7 @@ export default function DeliveryProviderSetupScreen({
   const user = useAuthStore((state) => state.user);
   const syncOnboardingFromServer = useAuthStore((state) => state.syncOnboardingFromServer);
   const applyServerOnboarding = useAuthStore((state) => state.applyServerOnboarding);
+  const deliveryProviderStatus = useAuthStore((state) => state.deliveryProviderStatus);
 
   const defaultFullName = useMemo(() => formatUserDisplayName(user), [user]);
 
@@ -64,11 +66,13 @@ export default function DeliveryProviderSetupScreen({
     let profileImageUrl: string | undefined;
 
     if (profileImageUri && isLocalImageUri(profileImageUri)) {
-      const localFile: LocalUploadFile = {
-        uri: profileImageUri,
-        name: `avatar-${Date.now()}.jpg`,
-        mimeType: 'image/jpeg',
-      };
+      const localFile = buildImageUploadFile({ uri: profileImageUri }, 'avatar');
+
+      const validationError = validateImageUpload(localFile);
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
       const uploadResult = await uploadAvatar(localFile);
 
       if (!uploadResult.ok) {
@@ -80,12 +84,17 @@ export default function DeliveryProviderSetupScreen({
       profileImageUrl = profileImageUri;
     }
 
-    const setupResult = await setupDeliveryProvider({
+    const payload = {
       fullName: fullName.trim() || defaultFullName,
       constructionAgencyId: agencyId,
       vehicleInfo: vehicleInfo.trim() || undefined,
       profileImageUrl,
-    });
+    };
+
+    const isUpdating = deliveryProviderStatus !== 'none';
+    const setupResult = isUpdating
+      ? await updateMyDeliveryProvider(payload)
+      : await setupDeliveryProvider(payload);
 
     if (!setupResult.ok) {
       throw new Error(setupResult.error.message);

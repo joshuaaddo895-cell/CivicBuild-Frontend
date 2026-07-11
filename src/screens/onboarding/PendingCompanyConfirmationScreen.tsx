@@ -11,7 +11,7 @@ import { AuthDecorBackground } from '@components/auth';
 import DeleteAccountModal from '@components/settings/DeleteAccountModal';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
-import { performDeleteAccount } from '@utils/session';
+import { performDeleteAccount, performSignOut } from '@utils/session';
 
 function confirmCancelRequest(onConfirm: () => void) {
   const title = 'Cancel association request?';
@@ -79,6 +79,10 @@ export default function PendingCompanyConfirmationScreen({
       cancelDeliveryProviderRequest();
       resetToRoleSelection();
     });
+  };
+
+  const handleSignOut = async () => {
+    await performSignOut();
   };
 
   const handleDeleteAccountConfirm = async () => {
@@ -207,6 +211,15 @@ export default function PendingCompanyConfirmationScreen({
               <Text style={styles.linkButtonText}>Choose Different Account Type</Text>
             </Pressable>
           ) : null}
+
+          <Pressable
+            onPress={() => void handleSignOut()}
+            style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+          >
+            <Text style={styles.linkButtonText}>Sign Out</Text>
+          </Pressable>
 
           <Pressable
             onPress={() => setDeleteModalVisible(true)}

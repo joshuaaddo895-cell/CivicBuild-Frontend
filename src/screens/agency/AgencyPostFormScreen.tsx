@@ -29,7 +29,7 @@ import {
 } from '@constants/agencyPostLabels';
 import theme from '@theme/index';
 import { isLocalImageUri, mapBackendAgencyPost } from '@utils/agencyPostMappers';
-import { buildImageUploadFile } from '@utils/uploadValidation';
+import { buildImageUploadFile, validateImageUpload } from '@utils/uploadValidation';
 
 const POST_CATEGORIES = AGENCY_POST_CATEGORIES;
 
@@ -104,6 +104,13 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
 
       if (imageUri && isLocalImageUri(imageUri)) {
         const localFile = selectedImageFile ?? buildImageUploadFile({ uri: imageUri }, 'post');
+
+        const validationError = validateImageUpload(localFile);
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+
         setIsUploading(true);
         const uploadResult = await uploadAgencyProductImage(localFile);
         if (!uploadResult.ok) {

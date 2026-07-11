@@ -55,6 +55,9 @@ export function getMainTabIcon(
       if (accountType === 'construction') {
         return 'post-add';
       }
+      if (accountType === 'delivery') {
+        return 'receipt-long';
+      }
       return focused ? 'favorite' : 'favorite-border';
     case 'Messages':
       return focused ? 'chat-bubble' : 'chat-bubble-outline';

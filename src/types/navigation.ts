@@ -82,6 +82,7 @@ export type AgencyStackParamList = {
 // ─── Delivery Stack ───────────────────────────────────────────────────────────
 export type DeliveryStackParamList = {
   DeliveryDashboard: undefined;
+  DeliveryStatus: undefined;
   Notifications: undefined;
   Settings: undefined;
   ChangePassword: undefined;

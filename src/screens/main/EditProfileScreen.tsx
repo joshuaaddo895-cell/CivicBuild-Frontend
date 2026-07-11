@@ -19,7 +19,7 @@ import ProfileAvatarEditor from '@components/profile/ProfileAvatarEditor';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 import { isLocalImageUri } from '@utils/agencyPostMappers';
-import { buildImageUploadFile } from '@utils/uploadValidation';
+import { buildImageUploadFile, validateImageUpload } from '@utils/uploadValidation';
 import { formatUserDisplayName } from '@utils/userDisplay';
 import { getUserInitials } from '@utils/userInitials';
 
@@ -94,6 +94,13 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       if (pendingPhotoUri) {
         if (isLocalImageUri(pendingPhotoUri)) {
           const localFile = buildImageUploadFile({ uri: pendingPhotoUri }, 'avatar');
+          const validationError = validateImageUpload(localFile);
+          if (validationError) {
+            setErrorMessage(validationError);
+            setIsSaving(false);
+            return;
+          }
+
           const uploadResult = await uploadAvatar(localFile);
 
           if (!uploadResult.ok) {

@@ -1,5 +1,5 @@
 export type DeliveryApprovalStatus = 'pending' | 'approved' | 'rejected';
-export type DeliveryJobStatus = 'assigned' | 'in_transit' | 'delivered';
+export type DeliveryJobStatus = 'assigned' | 'in_transit' | 'delivered' | 'cancelled';
 
 export interface DeliveryProviderSetupInput {
   fullName: string;

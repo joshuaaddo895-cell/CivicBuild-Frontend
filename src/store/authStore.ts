@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { isPersistableUserId } from '@api/authSession';
+import { getMyDeliveryProvider } from '@api/delivery';
 import { getOnboarding, type mapBackendOnboarding } from '@api/onboarding';
 import type { User } from '@appTypes/api';
 import type {
@@ -167,7 +168,27 @@ export const useAuthStore = create<AuthStore>()(
 
         const result = await getOnboarding();
         if (result.ok) {
-          get().applyServerOnboarding(result.data);
+          const onboardingData = { ...result.data };
+
+          if (
+            onboardingData.accountType === 'delivery' &&
+            onboardingData.deliveryProviderStatus === 'none'
+          ) {
+            const providerResult = await getMyDeliveryProvider();
+            if (providerResult.ok) {
+              const status = providerResult.data.approvalStatus;
+              if (status === 'pending') {
+                onboardingData.deliveryProviderStatus = 'pending_company_confirmation';
+              } else if (status === 'approved') {
+                onboardingData.deliveryProviderStatus = 'approved';
+                onboardingData.onboardingComplete = true;
+              } else if (status === 'rejected') {
+                onboardingData.deliveryProviderStatus = 'rejected';
+              }
+            }
+          }
+
+          get().applyServerOnboarding(onboardingData);
         }
       },
 

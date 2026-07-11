@@ -45,7 +45,7 @@ export function validateVerificationUpload(file: LocalUploadFile): string | null
       mimeType as (typeof VERIFICATION_ALLOWED_MIME_TYPES)[number],
     )
   ) {
-    return 'Only PDF, JPG, and PNG files are accepted.';
+    return "This file type isn't supported. Please upload a PDF, JPG, or PNG file.";
   }
 
   if (file.size != null && file.size > VERIFICATION_MAX_UPLOAD_BYTES) {
@@ -55,7 +55,7 @@ export function validateVerificationUpload(file: LocalUploadFile): string | null
   return null;
 }
 
-export function validatePortfolioUpload(file: LocalUploadFile): string | null {
+export function validateImageUpload(file: LocalUploadFile): string | null {
   const mimeType = resolveUploadMimeType(file);
 
   if (
@@ -63,7 +63,7 @@ export function validatePortfolioUpload(file: LocalUploadFile): string | null {
       mimeType as (typeof PORTFOLIO_ALLOWED_MIME_TYPES)[number],
     )
   ) {
-    return 'Only JPG and PNG images are accepted for portfolio uploads.';
+    return "This file type isn't supported. Please upload a JPG or PNG image.";
   }
 
   if (file.size != null && file.size > PORTFOLIO_MAX_UPLOAD_BYTES) {
@@ -72,6 +72,8 @@ export function validatePortfolioUpload(file: LocalUploadFile): string | null {
 
   return null;
 }
+
+export const validatePortfolioUpload = validateImageUpload;
 
 const LOCAL_UPLOAD_URI_PREFIXES = ['file://', 'content://', 'ph://', 'assets-library://', 'data:'];
 

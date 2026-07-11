@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getRecentAgencyPosts, listAgencies, type AgencyPostFeedItem } from '@api/agencies';
+import { listAgencies } from '@api/agencies';
 import { getSuppliers } from '@api/catalog';
 import type { MarketplaceListing } from '@appTypes/marketplace';
 import type { HomeMainScreenProps } from '@appTypes/navigation';
@@ -24,7 +23,6 @@ import {
   SectionHeader,
   SupplierCardList,
 } from '@components/dashboard';
-import { getAgencyPostCategoryLabel } from '@constants/agencyPostLabels';
 import { filterProductsByCategory } from '@constants/marketplaceData';
 import { useMarketplaceCategories } from '@hooks/useMarketplaceCategories';
 import { useUnreadInboxSync } from '@hooks/useUnreadInboxSync';
@@ -46,9 +44,7 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
-  const [agencyPosts, setAgencyPosts] = useState<AgencyPostFeedItem[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
-  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
 
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
@@ -97,25 +93,11 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
     setIsLoadingSuppliers(false);
   }, []);
 
-  const loadAgencyPosts = useCallback(async () => {
-    setIsLoadingPosts(true);
-
-    try {
-      const result = await getRecentAgencyPosts(6);
-      setAgencyPosts(result.ok ? result.data : []);
-    } catch {
-      setAgencyPosts([]);
-    }
-
-    setIsLoadingPosts(false);
-  }, []);
-
   useEffect(() => {
     void fetchCatalog();
     void loadSuppliers();
-    void loadAgencyPosts();
     void syncFromServer();
-  }, [fetchCatalog, loadAgencyPosts, loadSuppliers, syncFromServer]);
+  }, [fetchCatalog, loadSuppliers, syncFromServer]);
 
   const filteredProducts = useMemo(() => {
     const byCategory = filterProductsByCategory(marketplaceProducts, selectedCategoryId);
@@ -209,40 +191,6 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
                 }
               }}
             />
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader
-            title="Agency Posts"
-            actionLabel="See All"
-            onActionPress={() => navigation.navigate('AllSuppliers')}
-          />
-          {isLoadingPosts ? (
-            <View style={styles.inlineState}>
-              <ActivityIndicator color={theme.colors.primary} />
-            </View>
-          ) : agencyPosts.length === 0 ? (
-            <Text style={styles.emptyText}>No agency posts yet.</Text>
-          ) : (
-            agencyPosts.map((post) => (
-              <Pressable
-                key={post.id}
-                onPress={() => navigation.navigate('AgencyDetail', { agencyId: post.agencyId })}
-                style={({ pressed }) => [styles.postCard, pressed && styles.postCardPressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`${post.title} from ${post.agencyName}`}
-              >
-                <View style={styles.postCardHeader}>
-                  <Text style={styles.postCategory}>{getAgencyPostCategoryLabel(post.type)}</Text>
-                  <Text style={styles.postAgency}>{post.agencyName}</Text>
-                </View>
-                <Text style={styles.postTitle}>{post.title}</Text>
-                <Text style={styles.postDescription} numberOfLines={2}>
-                  {post.description}
-                </Text>
-              </Pressable>
-            ))
           )}
         </View>
 

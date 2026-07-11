@@ -9,6 +9,7 @@ import HomeTabNavigator from '@navigation/HomeTabNavigator';
 import MainTabBarButton, { getMainTabIcon } from '@navigation/MainTabBarButton';
 import MessagesStackNavigator from '@navigation/MessagesStackNavigator';
 import ProfileStackNavigator from '@navigation/ProfileStackNavigator';
+import DeliveryStatusScreen from '@screens/delivery/DeliveryStatusScreen';
 import SavedScreen from '@screens/main/SavedScreen';
 import { useAuthStore } from '@store/authStore';
 import { useInboxStore } from '@store/inboxStore';
@@ -71,10 +72,21 @@ export default function MainNavigator() {
       <Tab.Screen name="Home" component={HomeTabNavigator} options={{ title: 'Home' }} />
       <Tab.Screen
         name="Saved"
-        component={isConstructionAgency ? CreatePostTabPlaceholder : SavedScreen}
+        component={
+          accountType === 'delivery'
+            ? DeliveryStatusScreen
+            : isConstructionAgency
+              ? CreatePostTabPlaceholder
+              : SavedScreen
+        }
         options={{
-          title: isConstructionAgency ? 'Create' : 'Saved',
-          tabBarAccessibilityLabel: isConstructionAgency ? 'Create post' : 'Saved items',
+          title: accountType === 'delivery' ? 'Status' : isConstructionAgency ? 'Create' : 'Saved',
+          tabBarAccessibilityLabel:
+            accountType === 'delivery'
+              ? 'Delivery status'
+              : isConstructionAgency
+                ? 'Create post'
+                : 'Saved items',
         }}
         listeners={
           isConstructionAgency

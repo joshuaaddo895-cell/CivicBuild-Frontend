@@ -26,7 +26,7 @@ import { useProductStore } from '@store/productStore';
 import theme from '@theme/index';
 import { isLocalImageUri } from '@utils/agencyPostMappers';
 import { normalizeProductUnit } from '@utils/multipartUpload';
-import { buildImageUploadFile } from '@utils/uploadValidation';
+import { buildImageUploadFile, validateImageUpload } from '@utils/uploadValidation';
 
 const DEFAULT_IMAGE =
   'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80';
@@ -124,6 +124,13 @@ export default function AgencyProductFormScreen({
 
       if (isLocalImageUri(imageUri)) {
         const localFile = selectedImageFile ?? buildImageUploadFile({ uri: imageUri }, 'product');
+
+        const validationError = validateImageUpload(localFile);
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+
         setIsUploading(true);
         const uploadResult = await uploadAgencyProductImage(localFile);
         if (!uploadResult.ok) {

@@ -13,13 +13,19 @@ import theme from '@theme/index';
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
 function getInitialOnboardingRoute(): keyof OnboardingStackParamList {
-  const { accountType } = useAuthStore.getState();
+  const { accountType, deliveryProviderStatus } = useAuthStore.getState();
 
   if (!accountType) {
     return 'RoleSelection';
   }
 
   if (accountType === 'delivery') {
+    if (
+      deliveryProviderStatus === 'pending_company_confirmation' ||
+      deliveryProviderStatus === 'rejected'
+    ) {
+      return 'PendingCompanyConfirmation';
+    }
     return 'DeliveryProviderSetup';
   }
 

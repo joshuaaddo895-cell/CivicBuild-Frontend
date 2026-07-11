@@ -77,6 +77,8 @@ export function getDeliveryJobStatusLabel(status: DeliveryJobStatus): string {
       return 'In Transit';
     case 'delivered':
       return 'Delivered';
+    case 'cancelled':
+      return 'Cancelled';
     default:
       return status;
   }
