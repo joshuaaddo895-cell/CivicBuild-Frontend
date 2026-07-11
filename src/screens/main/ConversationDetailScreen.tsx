@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,16 +16,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  formatMessageTimestamp,
-  getThreadMessages,
-  markThreadRead,
-  sendMessage,
-  startThread,
-} from '@api/messages';
+import { formatMessageTimestamp, getThreadMessages, sendMessage, startThread } from '@api/messages';
 import type { ChatMessage } from '@appTypes/messages';
 import type { ConversationDetailScreenProps } from '@appTypes/navigation';
+import { useInboxStore } from '@store/inboxStore';
 import theme from '@theme/index';
+import { getMessageParticipantLabel } from '@utils/messageThreadDisplay';
 
 const CONVERSATION_POLL_MS = 5000;
 
@@ -39,13 +35,16 @@ export default function ConversationDetailScreen({
     supplierId,
     participantName,
     participantLogoUri,
+    participantLabel: routeParticipantLabel,
   } = route.params ?? {};
 
   const threadIdRef = useRef<string | null>(routeThreadId ?? null);
   const hasLoadedMessagesRef = useRef(false);
+  const hasMarkedReadRef = useRef(false);
 
   const [activeThreadId, setActiveThreadId] = useState<string | null>(routeThreadId ?? null);
   const [displayName, setDisplayName] = useState(participantName ?? 'Conversation');
+  const [displayLabel, setDisplayLabel] = useState(routeParticipantLabel ?? 'Contact');
   const [displayLogoUri, setDisplayLogoUri] = useState(participantLogoUri);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -53,34 +52,81 @@ export default function ConversationDetailScreen({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const markThreadReadOnServer = useInboxStore((state) => state.markThreadReadOnServer);
 
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()),
     [messages],
   );
 
-  const refreshMessages = useCallback(async (threadId: string, silent = true) => {
-    if (silent) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
-
-    const messagesResult = await getThreadMessages(threadId);
-
-    if (messagesResult.ok) {
-      setMessages(messagesResult.data);
-      hasLoadedMessagesRef.current = true;
-      void markThreadRead(threadId);
-    } else if (!silent || !hasLoadedMessagesRef.current) {
-      setError(messagesResult.error.message);
-      setMessages([]);
+  useEffect(() => {
+    const threadId = routeThreadId ?? activeThreadId ?? threadIdRef.current;
+    if (!threadId) {
+      return;
     }
 
-    setIsLoading(false);
-    setIsRefreshing(false);
-  }, []);
+    const knownThread = useInboxStore
+      .getState()
+      .threadsSnapshot.find((thread) => thread.id === threadId);
+    if (!knownThread) {
+      return;
+    }
+
+    if (!participantName || participantName === 'Conversation') {
+      setDisplayName(knownThread.participantName);
+    }
+
+    if (!routeParticipantLabel) {
+      setDisplayLabel(knownThread.participantLabel);
+    }
+
+    if (!participantLogoUri && knownThread.participantLogoUri) {
+      setDisplayLogoUri(knownThread.participantLogoUri);
+    }
+  }, [activeThreadId, participantLogoUri, participantName, routeParticipantLabel, routeThreadId]);
+
+  const refreshMessages = useCallback(
+    async (threadId: string, silent = true) => {
+      if (silent) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setError(null);
+
+      const messagesResult = await getThreadMessages(threadId);
+
+      if (messagesResult.ok) {
+        setMessages(messagesResult.data);
+        hasLoadedMessagesRef.current = true;
+
+        if (!hasMarkedReadRef.current) {
+          const threadLastMessageAt = useInboxStore
+            .getState()
+            .threadsSnapshot.find((thread) => thread.id === threadId)?.lastMessageAt;
+          const latestMessageAt = messagesResult.data.reduce<string | undefined>(
+            (latest, message) => {
+              if (!latest || new Date(message.sentAt).getTime() > new Date(latest).getTime()) {
+                return message.sentAt;
+              }
+              return latest;
+            },
+            undefined,
+          );
+
+          void markThreadReadOnServer(threadId, threadLastMessageAt ?? latestMessageAt);
+          hasMarkedReadRef.current = true;
+        }
+      } else if (!silent || !hasLoadedMessagesRef.current) {
+        setError(messagesResult.error.message);
+        setMessages([]);
+      }
+
+      setIsLoading(false);
+      setIsRefreshing(false);
+    },
+    [markThreadReadOnServer],
+  );
 
   const resolveThreadId = useCallback(async (): Promise<string | null> => {
     let threadId = threadIdRef.current ?? activeThreadId ?? routeThreadId ?? null;
@@ -104,6 +150,7 @@ export default function ConversationDetailScreen({
     threadIdRef.current = threadId;
     setActiveThreadId(threadId);
     setDisplayName(startResult.data.participantName);
+    setDisplayLabel(startResult.data.participantLabel);
     setDisplayLogoUri(startResult.data.participantLogoUri);
 
     return threadId;
@@ -144,6 +191,7 @@ export default function ConversationDetailScreen({
 
       return () => {
         cancelled = true;
+        hasMarkedReadRef.current = false;
         if (pollTimer) {
           clearInterval(pollTimer);
         }
@@ -199,9 +247,14 @@ export default function ConversationDetailScreen({
         >
           <MaterialIcons name="arrow-back" size={24} color={theme.colors.onSurface} />
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
-          {displayName}
-        </Text>
+        <View style={styles.headerTitleBlock}>
+          <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
+            {displayName}
+          </Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>
+            {displayLabel || getMessageParticipantLabel('unknown')}
+          </Text>
+        </View>
         {displayLogoUri ? (
           <Image
             source={{ uri: displayLogoUri }}
@@ -339,12 +392,23 @@ const styles = StyleSheet.create({
   backButtonPressed: {
     opacity: 0.7,
   },
-  headerTitle: {
+  headerTitleBlock: {
     flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerTitle: {
     textAlign: 'center',
     fontFamily: theme.typography.fontFamily.headline,
     fontSize: theme.typography.fontSize.headlineSm,
     color: theme.colors.onSurface,
+  },
+  headerSubtitle: {
+    textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onSurfaceVariant,
+    textTransform: 'uppercase',
   },
   headerSpacer: {
     width: 32,

@@ -3,22 +3,62 @@ import type { ChatMessage, MessageThread } from '@appTypes/messages';
 import type {
   BackendChatMessage,
   BackendMessageThread,
+  BackendThreadDetail,
+  PaginatedChatMessages,
+  PaginatedMessageThreads,
   SendMessageRequest,
   StartThreadRequest,
 } from '@appTypes/messagesApi';
+import {
+  getMessageParticipantKind,
+  getMessageParticipantLabel,
+  resolveThreadParticipantName,
+} from '@utils/messageThreadDisplay';
 
 import { toApiResult, type ApiResult } from './apiResult';
 import { unwrapApiResponse } from './authTypes';
 import apiClient from './client';
 
+function unwrapThreads(
+  data: BackendMessageThread[] | PaginatedMessageThreads,
+): BackendMessageThread[] {
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
+function unwrapThreadMessages(
+  data: BackendChatMessage[] | PaginatedChatMessages | BackendThreadDetail,
+): BackendChatMessage[] {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if ('messages' in data && Array.isArray(data.messages)) {
+    return data.messages;
+  }
+
+  if ('items' in data && Array.isArray(data.items)) {
+    return data.items;
+  }
+
+  return [];
+}
+
 export function mapBackendThread(thread: BackendMessageThread): MessageThread {
+  const participantKind = getMessageParticipantKind(thread);
+  const participantName = resolveThreadParticipantName(thread);
+
   return {
     id: thread.id,
-    participantName: thread.participantName,
+    participantName,
     participantLogoUri: thread.participantLogoUrl ?? '',
+    participantKind,
+    participantLabel: getMessageParticipantLabel(participantKind),
     lastMessage: thread.lastMessage,
     lastMessageAt: thread.lastMessageAt,
     unreadCount: thread.unreadCount,
+    agencyId: thread.agencyId ?? null,
+    supplierId: thread.supplierId ?? null,
+    customerId: thread.customerId ?? null,
   };
 }
 
@@ -35,8 +75,8 @@ export function mapBackendMessage(message: BackendChatMessage): ChatMessage {
 export async function getThreads(): Promise<ApiResult<MessageThread[]>> {
   return toApiResult(
     apiClient
-      .get<ApiResponse<BackendMessageThread[]>>('/api/messages/threads')
-      .then((response) => unwrapApiResponse(response.data).map(mapBackendThread)),
+      .get<ApiResponse<BackendMessageThread[] | PaginatedMessageThreads>>('/api/messages/threads')
+      .then((response) => unwrapThreads(unwrapApiResponse(response.data)).map(mapBackendThread)),
   );
 }
 
@@ -52,9 +92,23 @@ export async function startThread(input: StartThreadRequest): Promise<ApiResult<
     };
   }
 
+  if (input.supplierId && !input.agencyId) {
+    return {
+      ok: false,
+      error: {
+        message:
+          'Direct supplier messaging is not available yet. Open a construction agency and tap Message Us.',
+        statusCode: 400,
+        code: 'VALIDATION',
+      },
+    };
+  }
+
   return toApiResult(
     apiClient
-      .post<ApiResponse<BackendMessageThread>>('/api/messages/threads', input)
+      .post<ApiResponse<BackendMessageThread>>('/api/messages/threads', {
+        agencyId: input.agencyId,
+      })
       .then((response) => mapBackendThread(unwrapApiResponse(response.data))),
   );
 }
@@ -62,8 +116,12 @@ export async function startThread(input: StartThreadRequest): Promise<ApiResult<
 export async function getThreadMessages(threadId: string): Promise<ApiResult<ChatMessage[]>> {
   return toApiResult(
     apiClient
-      .get<ApiResponse<BackendChatMessage[]>>(`/api/messages/threads/${threadId}`)
-      .then((response) => unwrapApiResponse(response.data).map(mapBackendMessage)),
+      .get<ApiResponse<BackendChatMessage[] | PaginatedChatMessages | BackendThreadDetail>>(
+        `/api/messages/threads/${threadId}`,
+      )
+      .then((response) =>
+        unwrapThreadMessages(unwrapApiResponse(response.data)).map(mapBackendMessage),
+      ),
   );
 }
 

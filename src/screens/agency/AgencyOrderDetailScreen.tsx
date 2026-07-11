@@ -1,9 +1,18 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAgencyOrder, getOrderStatusLabel, updateAgencyOrderStatus } from '@api/agencyOrders';
+import { getThreads } from '@api/messages';
 import type { AgencyOrder, OrderStatus } from '@appTypes/agency';
 import type { AgencyOrderDetailScreenProps } from '@appTypes/navigation';
 import { ScreenHeader } from '@components/agency';
@@ -24,6 +33,7 @@ export default function AgencyOrderDetailScreen({
   const [loadError, setLoadError] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [statusError, setStatusError] = useState('');
+  const [isOpeningMessage, setIsOpeningMessage] = useState(false);
 
   const loadOrder = useCallback(async () => {
     setIsLoading(true);
@@ -64,16 +74,39 @@ export default function AgencyOrderDetailScreen({
     setOrder(result.data);
   };
 
-  const handleMessageCustomer = () => {
-    if (!order) {
+  const handleMessageCustomer = async () => {
+    if (!order || isOpeningMessage) {
+      return;
+    }
+
+    setIsOpeningMessage(true);
+
+    const result = await getThreads();
+
+    setIsOpeningMessage(false);
+
+    if (!result.ok) {
+      Alert.alert('Messages unavailable', result.error.message);
+      return;
+    }
+
+    const thread = result.data.find((entry) => entry.customerId === order.customerId);
+
+    if (!thread) {
+      Alert.alert(
+        'No conversation yet',
+        'This customer has not started a chat. They can message you from your agency profile.',
+      );
       return;
     }
 
     navigation.getParent()?.navigate('Messages', {
       screen: 'ConversationDetail',
       params: {
-        threadId: `thread-customer-${order.customerId}`,
-        participantName: order.customerName,
+        threadId: thread.id,
+        participantName: thread.participantName,
+        participantLogoUri: thread.participantLogoUri,
+        participantLabel: thread.participantLabel,
       },
     });
   };
@@ -188,7 +221,11 @@ export default function AgencyOrderDetailScreen({
           </View>
         </View>
 
-        <AuthPrimaryButton label="Message Customer" onPress={handleMessageCustomer} />
+        <AuthPrimaryButton
+          label="Message Customer"
+          loading={isOpeningMessage}
+          onPress={() => void handleMessageCustomer()}
+        />
       </ScrollView>
     </SafeAreaView>
   );

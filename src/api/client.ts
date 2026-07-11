@@ -2,6 +2,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
 import { getApiBaseUrl, getApiTimeoutMs } from '@config/api';
 import { useAuthStore } from '@store/authStore';
+import { isMultipartBody } from '@utils/multipartUpload';
 
 const AUTH_PATHS_WITHOUT_REFRESH = [
   '/api/auth/login',
@@ -36,6 +37,15 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    if (isMultipartBody(config.data)) {
+      if (typeof config.headers.delete === 'function') {
+        config.headers.delete('Content-Type');
+      } else {
+        delete config.headers['Content-Type'];
+      }
+    }
+
     return config;
   },
   (error: AxiosError) => Promise.reject(error),

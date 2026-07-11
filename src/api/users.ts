@@ -4,7 +4,7 @@ import { getMultipartUploadConfig } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 import { parseDisplayName } from '@utils/userDisplay';
 
-import { toApiResult, type ApiResult } from './apiResult';
+import { toUploadApiResult, type ApiResult } from './apiResult';
 import { mapBackendUserToUser, unwrapApiResponse } from './authTypes';
 import apiClient from './client';
 import { normalizeApiError, type NormalizedApiError } from './errors';
@@ -102,7 +102,7 @@ export async function updateProfilePicture(
 export async function uploadAvatar(
   file: LocalUploadFile,
 ): Promise<ApiResult<{ profilePictureUrl: string }>> {
-  return toApiResult(
+  return toUploadApiResult(
     apiClient
       .post<ApiResponse<{ profilePictureUrl: string }>>(
         '/api/users/me/avatar',
@@ -110,5 +110,6 @@ export async function uploadAvatar(
         getMultipartUploadConfig(),
       )
       .then((response) => unwrapApiResponse(response.data)),
+    'avatar',
   );
 }

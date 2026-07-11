@@ -15,7 +15,7 @@ import { deleteAgencyPost, getMyAgencyPosts } from '@api/agencies';
 import type { AgencyPost } from '@appTypes/agency';
 import type { AgencyPostsScreenProps } from '@appTypes/navigation';
 import { EmptyState, ScreenHeader } from '@components/agency';
-import { AGENCY_POST_TYPE_LABELS } from '@constants/agencyPostLabels';
+import { getAgencyPostCategoryLabel } from '@constants/agencyPostLabels';
 import theme from '@theme/index';
 import { mapBackendAgencyPost } from '@utils/agencyPostMappers';
 
@@ -80,7 +80,7 @@ export default function AgencyPostsScreen({ navigation }: AgencyPostsScreenProps
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
-        title="Posts & Announcements"
+        title="Posts"
         onBackPress={() => navigation.goBack()}
         rightAction={
           <Pressable
@@ -119,7 +119,7 @@ export default function AgencyPostsScreen({ navigation }: AgencyPostsScreenProps
             <EmptyState
               icon="campaign"
               title="No posts yet"
-              message="Share service updates, material arrivals, or general news with customers on your agency profile."
+              message="Share a service or material listing with customers on your profile and the home feed."
               actionLabel="Create Post"
               onActionPress={() => navigation.navigate('AgencyPostForm', {})}
             />
@@ -128,7 +128,7 @@ export default function AgencyPostsScreen({ navigation }: AgencyPostsScreenProps
               <View key={post.id} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={styles.typeTag}>
-                    <Text style={styles.typeText}>{AGENCY_POST_TYPE_LABELS[post.type]}</Text>
+                    <Text style={styles.typeText}>{getAgencyPostCategoryLabel(post.type)}</Text>
                   </View>
                   <Text style={styles.date}>{formatPostDate(post.createdAt)}</Text>
                 </View>

@@ -1,18 +1,19 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAgency, getAgencyPortfolio, getAgencyPosts, type BackendAgency } from '@api/agencies';
+import { getProducts } from '@api/catalog';
 import { startThread } from '@api/messages';
 import type { AgencyPost } from '@appTypes/agency';
+import type { Product } from '@appTypes/marketplace';
 import type { AgencyDetailScreenProps } from '@appTypes/navigation';
 import { AuthPrimaryButton } from '@components/auth';
 import { ProductGrid } from '@components/dashboard';
-import { AGENCY_POST_TYPE_LABELS } from '@constants/agencyPostLabels';
+import { getAgencyPostCategoryLabel } from '@constants/agencyPostLabels';
 import { useCartStore } from '@store/cartStore';
-import { useProductStore } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
 import { mapBackendAgencyPost } from '@utils/agencyPostMappers';
@@ -29,18 +30,13 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
   const { agencyId } = route.params;
 
   const [agency, setAgency] = useState<BackendAgency | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   const [posts, setPosts] = useState<AgencyPost[]>([]);
   const [portfolioUrls, setPortfolioUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isStartingThread, setIsStartingThread] = useState(false);
 
-  const fetchCatalog = useProductStore((state) => state.fetchCatalog);
-  const catalogProducts = useProductStore((state) => state.catalogProducts);
-  const products = useMemo(
-    () => catalogProducts.filter((product) => product.agencyId === agencyId),
-    [agencyId, catalogProducts],
-  );
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
   const addProduct = useCartStore((state) => state.addProduct);
@@ -48,32 +44,50 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
   const loadAgency = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setPosts([]);
+    setPortfolioUrls([]);
 
-    const [agencyResult, postsResult, portfolioResult] = await Promise.all([
-      getAgency(agencyId),
-      getAgencyPosts(agencyId),
-      getAgencyPortfolio(agencyId),
-    ]);
+    try {
+      const [agencyResult, productsResult] = await Promise.all([
+        getAgency(agencyId),
+        getProducts({ agencyId, limit: 20 }),
+      ]);
 
-    if (!agencyResult.ok) {
+      if (!agencyResult.ok) {
+        setAgency(null);
+        setProducts([]);
+        setError(agencyResult.error.message);
+        return;
+      }
+
+      setAgency(agencyResult.data);
+      setProducts(productsResult.ok ? productsResult.data.items : []);
+    } catch (loadError) {
       setAgency(null);
-      setError(agencyResult.error.message);
+      setProducts([]);
+      setError(loadError instanceof Error ? loadError.message : 'Unable to load agency.');
+    } finally {
       setIsLoading(false);
-      return;
     }
 
-    setAgency(agencyResult.data);
-    setPosts(postsResult.ok ? postsResult.data.map(mapBackendAgencyPost) : []);
-    setPortfolioUrls(
-      portfolioResult.ok ? portfolioResult.data.map((image) => image.deliveryUrl) : [],
-    );
-    setIsLoading(false);
+    try {
+      const [postsResult, portfolioResult] = await Promise.all([
+        getAgencyPosts(agencyId),
+        getAgencyPortfolio(agencyId),
+      ]);
+
+      setPosts(postsResult.ok ? postsResult.data.map(mapBackendAgencyPost) : []);
+      setPortfolioUrls(
+        portfolioResult.ok ? portfolioResult.data.map((image) => image.deliveryUrl) : [],
+      );
+    } catch {
+      // Posts and portfolio are optional; agency profile is already visible.
+    }
   }, [agencyId]);
 
   useEffect(() => {
-    void fetchCatalog();
     void loadAgency();
-  }, [fetchCatalog, loadAgency]);
+  }, [loadAgency]);
 
   const handleMessagePress = async () => {
     if (!agency || isStartingThread) {
@@ -97,6 +111,7 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
         threadId: result.data.id,
         participantName: result.data.participantName,
         participantLogoUri: result.data.participantLogoUri,
+        participantLabel: result.data.participantLabel,
       },
     });
   };
@@ -107,6 +122,8 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
       addProduct(product);
     }
   };
+
+  const visiblePosts = posts.filter((post) => post.type === 'service' || post.type === 'material');
 
   if (isLoading) {
     return (
@@ -285,14 +302,14 @@ export default function AgencyDetailScreen({ navigation, route }: AgencyDetailSc
           />
         )}
 
-        <Text style={styles.sectionTitle}>Recent Updates</Text>
-        {posts.length === 0 ? (
-          <Text style={styles.emptyText}>No updates posted yet.</Text>
+        <Text style={styles.sectionTitle}>Posts</Text>
+        {visiblePosts.length === 0 ? (
+          <Text style={styles.emptyText}>No posts yet.</Text>
         ) : (
-          posts.slice(0, 5).map((post) => (
+          visiblePosts.slice(0, 5).map((post) => (
             <View key={post.id} style={styles.postCard}>
               <View style={styles.postHeader}>
-                <Text style={styles.postType}>{AGENCY_POST_TYPE_LABELS[post.type]}</Text>
+                <Text style={styles.postType}>{getAgencyPostCategoryLabel(post.type)}</Text>
                 <Text style={styles.postDate}>{formatPostDate(post.createdAt)}</Text>
               </View>
               <Text style={styles.postTitle}>{post.title}</Text>

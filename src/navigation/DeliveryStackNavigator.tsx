@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 
 import type { DeliveryStackParamList } from '@appTypes/navigation';
+import NotificationsScreen from '@screens/agency/NotificationsScreen';
 import DeliveryDashboardScreen from '@screens/delivery/DeliveryDashboardScreen';
 import ChangePasswordScreen from '@screens/main/ChangePasswordScreen';
 import SettingsScreen from '@screens/main/SettingsScreen';
@@ -19,6 +20,7 @@ export default function DeliveryStackNavigator() {
       }}
     >
       <Stack.Screen name="DeliveryDashboard" component={DeliveryDashboardScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     </Stack.Navigator>

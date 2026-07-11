@@ -73,6 +73,37 @@ export function validatePortfolioUpload(file: LocalUploadFile): string | null {
   return null;
 }
 
+const LOCAL_UPLOAD_URI_PREFIXES = ['file://', 'content://', 'ph://', 'assets-library://', 'data:'];
+
+export function isLocalUploadUri(uri: string | null | undefined): boolean {
+  if (!uri) {
+    return false;
+  }
+
+  if (!uri.includes('://')) {
+    return true;
+  }
+
+  return LOCAL_UPLOAD_URI_PREFIXES.some((prefix) => uri.startsWith(prefix));
+}
+
+export function buildImageUploadFile(
+  asset: {
+    uri: string;
+    fileName?: string | null;
+    mimeType?: string | null;
+    fileSize?: number | null;
+  },
+  prefix = 'image',
+): LocalUploadFile {
+  return {
+    uri: asset.uri,
+    name: asset.fileName ?? `${prefix}-${Date.now()}.jpg`,
+    mimeType: asset.mimeType ?? 'image/jpeg',
+    size: asset.fileSize ?? undefined,
+  };
+}
+
 export function buildMultipartFormData(file: LocalUploadFile): FormData {
   const formData = new FormData();
   const mimeType = resolveUploadMimeType(file);

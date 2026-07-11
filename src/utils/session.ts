@@ -5,6 +5,7 @@ import { deleteAccount } from '@api/account';
 import { logout as logoutApi } from '@api/auth';
 import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
+import { clearPersistedInboxState } from '@store/inboxStore';
 import { useSavedStore } from '@store/savedStore';
 
 const ACCOUNT_DELETED_TOAST_KEY = 'civicbuild_account_deleted_toast';
@@ -56,6 +57,7 @@ export async function consumeAccountDeletedToastFlag(): Promise<boolean> {
 export async function purgeLocalSession(): Promise<void> {
   useCartStore.getState().clearCart();
   useSavedStore.setState({ items: [], hasSynced: false });
+  clearPersistedInboxState();
 
   await Promise.all([
     useAuthStore.getState().logout({ wipeOnboarding: true }),
@@ -75,6 +77,7 @@ export async function performSignOut(): Promise<void> {
   }
 
   await logout();
+  clearPersistedInboxState();
 }
 
 export type DeleteAccountOutcome =

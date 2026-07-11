@@ -60,6 +60,7 @@ export type HomeStackParamList = {
   AllSuppliers: undefined;
   SupplierDetail: { supplierId: string };
   AgencyDetail: { agencyId: string };
+  Notifications: undefined;
 };
 
 // ─── Agency Stack ─────────────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ export type AgencyStackParamList = {
 // ─── Delivery Stack ───────────────────────────────────────────────────────────
 export type DeliveryStackParamList = {
   DeliveryDashboard: undefined;
+  Notifications: undefined;
   Settings: undefined;
   ChangePassword: undefined;
 };
@@ -94,6 +96,7 @@ export type MessagesStackParamList = {
     supplierId?: string;
     participantName?: string;
     participantLogoUri?: string;
+    participantLabel?: string;
   };
 };
 

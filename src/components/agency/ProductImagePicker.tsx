@@ -4,11 +4,13 @@ import * as ImagePicker from 'expo-image-picker';
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import theme from '@theme/index';
+import { buildImageUploadFile } from '@utils/uploadValidation';
 
 interface ProductImagePickerProps {
   imageUri: string | null;
-  onImageSelected: (uri: string) => void;
+  onImageSelected: (file: LocalUploadFile) => void;
   isLoading?: boolean;
 }
 
@@ -30,8 +32,8 @@ export default function ProductImagePicker({
       quality: 0.8,
     });
 
-    if (!result.canceled && result.assets[0]?.uri) {
-      onImageSelected(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      onImageSelected(buildImageUploadFile(result.assets[0], 'product'));
     }
   };
 

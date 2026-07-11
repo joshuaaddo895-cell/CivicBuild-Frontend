@@ -209,18 +209,21 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
     }
   }, [product]);
 
-  const handleMessageSupplier = useCallback(async () => {
-    if (!supplier || isStartingMessage) {
-      if (!supplier) {
-        navigation.getParent()?.navigate('Messages', { screen: 'MessagesList' });
-      }
+  const handleMessageSeller = useCallback(async () => {
+    if (isStartingMessage) {
+      return;
+    }
+
+    const agencyId = product?.agencyId;
+    if (!agencyId) {
+      setMessageError('Direct supplier messaging is not available yet.');
       return;
     }
 
     setMessageError('');
     setIsStartingMessage(true);
 
-    const result = await startThread({ supplierId: supplier.id });
+    const result = await startThread({ agencyId });
 
     setIsStartingMessage(false);
 
@@ -233,12 +236,13 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
       screen: 'ConversationDetail',
       params: {
         threadId: result.data.id,
-        supplierId: supplier.id,
+        agencyId,
         participantName: result.data.participantName,
         participantLogoUri: result.data.participantLogoUri,
+        participantLabel: result.data.participantLabel,
       },
     });
-  }, [isStartingMessage, navigation, supplier]);
+  }, [isStartingMessage, navigation, product?.agencyId]);
 
   const handleOpenProductReviews = useCallback(() => {
     if (!product) {
@@ -495,17 +499,19 @@ export default function ProductDetailScreen({ navigation, route }: ProductDetail
                 </Pressable>
               </View>
             </View>
-            <Pressable
-              onPress={() => void handleMessageSupplier()}
-              style={({ pressed }) => [styles.messageButton, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`Message ${product.supplierName ?? 'supplier'}`}
-            >
-              <MaterialIcons name="chat" size={18} color={theme.colors.primary} />
-              <Text style={styles.messageButtonText}>
-                {isStartingMessage ? 'Opening chat...' : 'Message Supplier'}
-              </Text>
-            </Pressable>
+            {product.agencyId ? (
+              <Pressable
+                onPress={() => void handleMessageSeller()}
+                style={({ pressed }) => [styles.messageButton, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Message construction agency"
+              >
+                <MaterialIcons name="chat" size={18} color={theme.colors.primary} />
+                <Text style={styles.messageButtonText}>
+                  {isStartingMessage ? 'Opening chat...' : 'Message Agency'}
+                </Text>
+              </Pressable>
+            ) : null}
             {messageError ? <Text style={styles.messageError}>{messageError}</Text> : null}
           </View>
 

@@ -1,15 +1,17 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 
 import type { MainTabParamList } from '@appTypes/navigation';
+import { useUnreadInboxSync } from '@hooks/useUnreadInboxSync';
 import HomeTabNavigator from '@navigation/HomeTabNavigator';
 import MainTabBarButton, { getMainTabIcon } from '@navigation/MainTabBarButton';
 import MessagesStackNavigator from '@navigation/MessagesStackNavigator';
 import ProfileStackNavigator from '@navigation/ProfileStackNavigator';
 import SavedScreen from '@screens/main/SavedScreen';
 import { useAuthStore } from '@store/authStore';
+import { useInboxStore } from '@store/inboxStore';
 import theme from '@theme/index';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -21,6 +23,17 @@ function CreatePostTabPlaceholder() {
 export default function MainNavigator() {
   const accountType = useAuthStore((state) => state.accountType);
   const isConstructionAgency = accountType === 'construction';
+  const unreadMessageCount = useInboxStore((state) => state.unreadMessageCount);
+  const refreshUnreadCounts = useInboxStore((state) => state.refreshUnreadCounts);
+
+  useUnreadInboxSync();
+
+  useEffect(() => {
+    void refreshUnreadCounts();
+  }, [refreshUnreadCounts]);
+
+  const messagesTabBadge =
+    unreadMessageCount > 0 ? (unreadMessageCount > 99 ? '99+' : unreadMessageCount) : undefined;
 
   return (
     <Tab.Navigator
@@ -80,7 +93,12 @@ export default function MainNavigator() {
       <Tab.Screen
         name="Messages"
         component={MessagesStackNavigator}
-        options={{ title: 'Messages' }}
+        options={{ title: 'Messages', tabBarBadge: messagesTabBadge }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('Messages', { screen: 'MessagesList' });
+          },
+        })}
       />
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>

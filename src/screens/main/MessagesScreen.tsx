@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,39 +16,82 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatMessageTimestamp, getThreads } from '@api/messages';
 import type { MessageThread } from '@appTypes/messages';
 import type { MessagesListScreenProps } from '@appTypes/navigation';
+import { useUnreadInboxSync } from '@hooks/useUnreadInboxSync';
+import { useInboxStore } from '@store/inboxStore';
 import theme from '@theme/index';
+import {
+  getParticipantAvatarIcon,
+  getThreadInitials,
+  sortThreadsByRecent,
+} from '@utils/messageThreadDisplay';
 
 export default function MessagesScreen({ navigation }: MessagesListScreenProps) {
+  useUnreadInboxSync();
+
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
+  const setUnreadFromThreads = useInboxStore((state) => state.setUnreadFromThreads);
+  const markThreadReadOnServer = useInboxStore((state) => state.markThreadReadOnServer);
+  const threadsSnapshot = useInboxStore((state) => state.threadsSnapshot);
 
-  const loadThreads = useCallback(async (silent = false) => {
-    if (silent) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
+  useEffect(() => {
+    if (hasLoadedRef.current && threadsSnapshot.length > 0) {
+      setThreads(threadsSnapshot);
     }
-    setError(null);
+  }, [threadsSnapshot]);
 
-    const result = await getThreads();
+  const loadThreads = useCallback(
+    async (silent = false) => {
+      if (silent) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setError(null);
 
-    if (result.ok) {
-      setThreads(result.data);
-      hasLoadedRef.current = true;
-    } else if (!silent || !hasLoadedRef.current) {
-      setThreads([]);
-      setError(result.error.message);
-    }
+      const result = await getThreads();
 
-    setIsLoading(false);
-    setIsRefreshing(false);
-  }, []);
+      if (result.ok) {
+        const mergedThreads = sortThreadsByRecent(setUnreadFromThreads(result.data));
+        setThreads(mergedThreads);
+        hasLoadedRef.current = true;
+      } else if (!silent || !hasLoadedRef.current) {
+        setThreads([]);
+        setError(result.error.message);
+      }
+
+      setIsLoading(false);
+      setIsRefreshing(false);
+    },
+    [setUnreadFromThreads],
+  );
+
+  const handleThreadPress = useCallback(
+    (thread: MessageThread) => {
+      void markThreadReadOnServer(thread.id, thread.lastMessageAt);
+      setThreads((current) =>
+        current.map((entry) => (entry.id === thread.id ? { ...entry, unreadCount: 0 } : entry)),
+      );
+
+      navigation.navigate('ConversationDetail', {
+        threadId: thread.id,
+        participantName: thread.participantName,
+        participantLogoUri: thread.participantLogoUri,
+        participantLabel: thread.participantLabel,
+      });
+    },
+    [markThreadReadOnServer, navigation],
+  );
 
   useFocusEffect(
     useCallback(() => {
+      const snapshot = useInboxStore.getState().threadsSnapshot;
+      if (snapshot.length > 0) {
+        setThreads(snapshot);
+      }
       void loadThreads(hasLoadedRef.current);
     }, [loadThreads]),
   );
@@ -58,6 +101,11 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
       <Text style={styles.screenTitle} accessibilityRole="header">
         Messages
       </Text>
+      {threads.length > 0 ? (
+        <Text style={styles.screenSubtitle}>
+          {threads.length} conversation{threads.length === 1 ? '' : 's'} — tap one to open the chat
+        </Text>
+      ) : null}
 
       {isLoading ? (
         <View style={styles.centeredState}>
@@ -97,19 +145,14 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
           }
           renderItem={({ item }) => {
             const hasUnread = item.unreadCount > 0;
+            const avatarIcon = getParticipantAvatarIcon(item.participantKind);
 
             return (
               <Pressable
-                onPress={() =>
-                  navigation.navigate('ConversationDetail', {
-                    threadId: item.id,
-                    participantName: item.participantName,
-                    participantLogoUri: item.participantLogoUri,
-                  })
-                }
+                onPress={() => handleThreadPress(item)}
                 style={({ pressed }) => [styles.threadRow, pressed && styles.threadRowPressed]}
                 accessibilityRole="button"
-                accessibilityLabel={`Conversation with ${item.participantName}`}
+                accessibilityLabel={`Conversation with ${item.participantName}, ${item.participantLabel}`}
               >
                 {item.participantLogoUri ? (
                   <Image
@@ -120,21 +163,25 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
                   />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                    <MaterialIcons
-                      name="business"
-                      size={24}
-                      color={theme.colors.onSurfaceVariant}
-                    />
+                    <Text style={styles.avatarInitials}>
+                      {getThreadInitials(item.participantName)}
+                    </Text>
                   </View>
                 )}
                 <View style={styles.threadBody}>
                   <View style={styles.threadHeader}>
-                    <Text
-                      style={[styles.participantName, hasUnread && styles.unreadText]}
-                      numberOfLines={1}
-                    >
-                      {item.participantName}
-                    </Text>
+                    <View style={styles.titleBlock}>
+                      <Text
+                        style={[styles.participantName, hasUnread && styles.unreadText]}
+                        numberOfLines={1}
+                      >
+                        {item.participantName}
+                      </Text>
+                      <View style={styles.kindBadge}>
+                        <MaterialIcons name={avatarIcon} size={12} color={theme.colors.primary} />
+                        <Text style={styles.kindText}>{item.participantLabel}</Text>
+                      </View>
+                    </View>
                     <Text style={styles.timestamp}>
                       {formatMessageTimestamp(item.lastMessageAt)}
                     </Text>
@@ -144,7 +191,7 @@ export default function MessagesScreen({ navigation }: MessagesListScreenProps) 
                       style={[styles.preview, hasUnread && styles.unreadText]}
                       numberOfLines={1}
                     >
-                      {item.lastMessage}
+                      {item.lastMessage || 'No messages yet'}
                     </Text>
                     {hasUnread ? (
                       <View style={styles.unreadDot} accessibilityLabel="Unread messages" />
@@ -172,6 +219,13 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.headlineLgMobile,
     lineHeight: theme.typography.lineHeight.headlineLgMobile,
     color: theme.colors.onSurface,
+    marginBottom: theme.spacing.xs,
+  },
+  screenSubtitle: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    lineHeight: theme.typography.lineHeight.bodySm,
+    color: theme.colors.onSurfaceVariant,
     marginBottom: theme.spacing.stackMd,
   },
   centeredState: {
@@ -237,6 +291,13 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: theme.colors.primaryContainer,
+  },
+  avatarInitials: {
+    fontFamily: theme.typography.fontFamily.headline,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.onPrimaryContainer,
+    fontWeight: '700',
   },
   threadBody: {
     flex: 1,
@@ -244,12 +305,26 @@ const styles = StyleSheet.create({
   },
   threadHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
   },
-  participantName: {
+  titleBlock: {
     flex: 1,
+    gap: 2,
+  },
+  kindBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  kindText: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.primary,
+    textTransform: 'uppercase',
+  },
+  participantName: {
     fontFamily: theme.typography.fontFamily.bodySemi,
     fontSize: theme.typography.fontSize.bodyMd,
     color: theme.colors.onSurface,

@@ -20,7 +20,9 @@ import type { Product } from '@appTypes/marketplace';
 import type { AgencyDashboardScreenProps } from '@appTypes/navigation';
 import { DashboardPreviewCard } from '@components/agency';
 import { DashboardHeader, ProductGrid, SectionHeader } from '@components/dashboard';
+import { useUnreadInboxSync } from '@hooks/useUnreadInboxSync';
 import { useAuthStore } from '@store/authStore';
+import { useInboxStore } from '@store/inboxStore';
 import { useProductStore } from '@store/productStore';
 import theme from '@theme/index';
 import { mapBackendAgencyPost } from '@utils/agencyPostMappers';
@@ -32,6 +34,9 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
 
   const fetchCatalog = useProductStore((state) => state.fetchCatalog);
   const getProductsByAgencyId = useProductStore((state) => state.getProductsByAgencyId);
+  const unreadNotificationCount = useInboxStore((state) => state.unreadNotificationCount);
+
+  useUnreadInboxSync();
 
   const [agency, setAgency] = useState<BackendAgency | null>(null);
   const [agencyProducts, setAgencyProducts] = useState<Product[]>([]);
@@ -119,6 +124,7 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
         userAvatarUri={userAvatarUri}
         onAvatarPress={() => navigation.getParent()?.navigate('Profile', { screen: 'ProfileMain' })}
         onSettingsPress={() => navigation.navigate('Settings')}
+        hasUnreadNotifications={unreadNotificationCount > 0}
         onNotificationsPress={() => navigation.navigate('Notifications')}
       />
 
@@ -149,7 +155,7 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
             </Text>
             <Text style={styles.agencyName}>{agency?.name ?? 'Your Construction Agency'}</Text>
             <Text style={styles.heroSubtitle}>
-              Manage products, orders, announcements, and delivery personnel.
+              Manage products, posts, orders, and delivery personnel.
             </Text>
           </View>
 
@@ -229,7 +235,7 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
 
           <View style={styles.section}>
             <SectionHeader
-              title="Posts & Announcements"
+              title="Posts"
               actionLabel="See All"
               onActionPress={() => navigation.navigate('AgencyPosts')}
             />
@@ -242,7 +248,7 @@ export default function AgencyDashboardScreen({ navigation }: AgencyDashboardScr
               />
             ) : (
               <Text style={styles.previewEmpty}>
-                No posts yet — share an update with customers.
+                No posts yet — share a service or material with customers.
               </Text>
             )}
           </View>

@@ -5,7 +5,7 @@ import type {
   VerificationDocumentUrlData,
   LocalUploadFile,
 } from '@appTypes/verificationDocuments';
-import { getMultipartUploadConfig } from '@utils/multipartUpload';
+import { getMultipartUploadConfig, logUploadFailure } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 
 import { unwrapApiResponse } from './authTypes';
@@ -60,6 +60,7 @@ export async function uploadVerificationDocument(
 
     return { ok: true, data: unwrapApiResponse(response.data) };
   } catch (error) {
+    logUploadFailure('verification document', error);
     return { ok: false, error: normalizeApiError(error) };
   }
 }

@@ -1,6 +1,6 @@
 import type { ApiResponse } from '@appTypes/api';
 import type { AgencyPortfolioUploadData, LocalUploadFile } from '@appTypes/verificationDocuments';
-import { getMultipartUploadConfig } from '@utils/multipartUpload';
+import { getMultipartUploadConfig, logUploadFailure } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 
 import { unwrapApiResponse } from './authTypes';
@@ -39,6 +39,7 @@ export async function uploadAgencyPortfolioImage(
 
     return { ok: true, data: unwrapApiResponse(response.data) };
   } catch (error) {
+    logUploadFailure('agency portfolio image', error);
     return { ok: false, error: normalizeApiError(error) };
   }
 }

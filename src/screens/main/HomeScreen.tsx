@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { listAgencies } from '@api/agencies';
+import { getRecentAgencyPosts, listAgencies, type AgencyPostFeedItem } from '@api/agencies';
 import { getSuppliers } from '@api/catalog';
 import type { MarketplaceListing } from '@appTypes/marketplace';
 import type { HomeMainScreenProps } from '@appTypes/navigation';
@@ -23,10 +24,13 @@ import {
   SectionHeader,
   SupplierCardList,
 } from '@components/dashboard';
+import { getAgencyPostCategoryLabel } from '@constants/agencyPostLabels';
 import { filterProductsByCategory } from '@constants/marketplaceData';
 import { useMarketplaceCategories } from '@hooks/useMarketplaceCategories';
+import { useUnreadInboxSync } from '@hooks/useUnreadInboxSync';
 import { useAuthStore } from '@store/authStore';
 import { useCartStore } from '@store/cartStore';
+import { useInboxStore } from '@store/inboxStore';
 import { useProductStore } from '@store/productStore';
 import { useSavedStore } from '@store/savedStore';
 import theme from '@theme/index';
@@ -42,8 +46,11 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
+  const [agencyPosts, setAgencyPosts] = useState<AgencyPostFeedItem[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
+  const [postsError, setPostsError] = useState<string | null>(null);
 
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
@@ -52,6 +59,9 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const cartItemCount = useCartStore((state) =>
     state.items.reduce((sum, item) => sum + item.quantity, 0),
   );
+  const unreadNotificationCount = useInboxStore((state) => state.unreadNotificationCount);
+
+  useUnreadInboxSync();
 
   const userInitials = getUserInitials(user, deliveryProviderProfile?.fullName);
   const userAvatarUri = user?.avatar ?? deliveryProviderProfile?.profileImageUri ?? null;
@@ -88,11 +98,27 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
     setIsLoadingSuppliers(false);
   }, []);
 
+  const loadAgencyPosts = useCallback(async () => {
+    setIsLoadingPosts(true);
+    setPostsError(null);
+
+    const result = await getRecentAgencyPosts(6);
+    if (result.ok) {
+      setAgencyPosts(result.data);
+    } else {
+      setAgencyPosts([]);
+      setPostsError(result.error.message);
+    }
+
+    setIsLoadingPosts(false);
+  }, []);
+
   useEffect(() => {
     void fetchCatalog();
     void loadSuppliers();
+    void loadAgencyPosts();
     void syncFromServer();
-  }, [fetchCatalog, loadSuppliers, syncFromServer]);
+  }, [fetchCatalog, loadAgencyPosts, loadSuppliers, syncFromServer]);
 
   const filteredProducts = useMemo(() => {
     const byCategory = filterProductsByCategory(marketplaceProducts, selectedCategoryId);
@@ -139,7 +165,8 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
         onAvatarPress={handleOpenProfile}
         onCartPress={() => navigation.navigate('Cart')}
         onSettingsPress={() => navigation.navigate('Settings')}
-        onNotificationsPress={() => {}}
+        hasUnreadNotifications={unreadNotificationCount > 0}
+        onNotificationsPress={() => navigation.navigate('Notifications')}
       />
       <ScrollView
         ref={scrollRef}
@@ -185,6 +212,42 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
                 }
               }}
             />
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader
+            title="Agency Posts"
+            actionLabel="See All"
+            onActionPress={() => navigation.navigate('AllSuppliers')}
+          />
+          {isLoadingPosts ? (
+            <View style={styles.inlineState}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : postsError ? (
+            <Text style={styles.errorText}>{postsError}</Text>
+          ) : agencyPosts.length === 0 ? (
+            <Text style={styles.emptyText}>No agency posts yet.</Text>
+          ) : (
+            agencyPosts.map((post) => (
+              <Pressable
+                key={post.id}
+                onPress={() => navigation.navigate('AgencyDetail', { agencyId: post.agencyId })}
+                style={({ pressed }) => [styles.postCard, pressed && styles.postCardPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${post.title} from ${post.agencyName}`}
+              >
+                <View style={styles.postCardHeader}>
+                  <Text style={styles.postCategory}>{getAgencyPostCategoryLabel(post.type)}</Text>
+                  <Text style={styles.postAgency}>{post.agencyName}</Text>
+                </View>
+                <Text style={styles.postTitle}>{post.title}</Text>
+                <Text style={styles.postDescription} numberOfLines={2}>
+                  {post.description}
+                </Text>
+              </Pressable>
+            ))
           )}
         </View>
 
@@ -248,5 +311,48 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     textAlign: 'center',
     paddingVertical: theme.spacing.md,
+  },
+  postCard: {
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.outlineVariant,
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
+  },
+  postCardPressed: {
+    opacity: 0.85,
+  },
+  postCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
+  postCategory: {
+    fontFamily: theme.typography.fontFamily.label,
+    fontSize: theme.typography.fontSize.labelMd,
+    color: theme.colors.primary,
+    textTransform: 'uppercase',
+  },
+  postAgency: {
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.onSurfaceVariant,
+  },
+  postTitle: {
+    fontFamily: theme.typography.fontFamily.bodySemi,
+    fontSize: theme.typography.fontSize.bodyMd,
+    color: theme.colors.onSurface,
+    fontWeight: '600',
+  },
+  postDescription: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.bodySm,
+    color: theme.colors.onSurfaceVariant,
+    lineHeight: theme.typography.lineHeight.bodySm,
   },
 });

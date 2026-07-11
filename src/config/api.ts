@@ -53,3 +53,8 @@ export function getApiTimeoutMs(): number {
   const parsed = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 10_000;
 }
+
+export function getUploadTimeoutMs(): number {
+  const parsed = Number(process.env.EXPO_PUBLIC_UPLOAD_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+}

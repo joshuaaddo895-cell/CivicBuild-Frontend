@@ -5,10 +5,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getProducts, getSupplier } from '@api/catalog';
-import { startThread } from '@api/messages';
 import type { Product, Supplier } from '@appTypes/marketplace';
 import type { SupplierDetailScreenProps } from '@appTypes/navigation';
-import { AuthPrimaryButton } from '@components/auth';
 import { ProductGrid } from '@components/dashboard';
 import { resolveSupplierLogoUri } from '@constants/placeholderImages';
 import { useMarketplaceCategories } from '@hooks/useMarketplaceCategories';
@@ -24,8 +22,6 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isStartingThread, setIsStartingThread] = useState(false);
-  const [messageError, setMessageError] = useState('');
 
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
@@ -68,8 +64,8 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
   const tagline = supplier ? `Trusted ${categoryLabel.toLowerCase()} supplier on CivicBuild` : '';
   const description = supplier
     ? supplier.verified
-      ? `${supplier.name} is a verified supplier on CivicBuild. Browse their listed products or message them for quotes and delivery coordination.`
-      : `${supplier.name} lists ${categoryLabel.toLowerCase()} on CivicBuild. Message them for availability, pricing, and delivery options.`
+      ? `${supplier.name} is a verified supplier on CivicBuild. Browse their listed products below or contact a construction agency for project help.`
+      : `${supplier.name} lists ${categoryLabel.toLowerCase()} on CivicBuild. Browse their products below or contact a construction agency for project help.`
     : '';
 
   if (isLoading) {
@@ -109,34 +105,6 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
       </SafeAreaView>
     );
   }
-
-  const handleMessagePress = async () => {
-    if (!supplier || isStartingThread) {
-      return;
-    }
-
-    setMessageError('');
-    setIsStartingThread(true);
-
-    const result = await startThread({ supplierId: supplier.id });
-
-    setIsStartingThread(false);
-
-    if (!result.ok) {
-      setMessageError(result.error.message);
-      return;
-    }
-
-    navigation.getParent()?.navigate('Messages', {
-      screen: 'ConversationDetail',
-      params: {
-        threadId: result.data.id,
-        supplierId: supplier.id,
-        participantName: result.data.participantName,
-        participantLogoUri: result.data.participantLogoUri,
-      },
-    });
-  };
 
   const handleReviewsPress = () => {
     navigation.navigate('Reviews', {
@@ -235,7 +203,8 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
           <View style={styles.contactHint}>
             <MaterialIcons name="chat" size={18} color={theme.colors.primary} />
             <Text style={styles.contactHintText}>
-              Contact this supplier via Messages for quotes, stock checks, and delivery.
+              Direct supplier messaging is coming soon. Browse products below or message a
+              construction agency from the home screen.
             </Text>
           </View>
         </View>
@@ -244,7 +213,7 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
         {products.length === 0 ? (
           <View style={styles.emptyProducts}>
             <Text style={styles.emptyProductsText}>
-              No listed products yet. Message the supplier to request a quote.
+              No listed products yet. Check back later or browse other suppliers.
             </Text>
           </View>
         ) : (
@@ -257,16 +226,6 @@ export default function SupplierDetailScreen({ navigation, route }: SupplierDeta
           />
         )}
       </ScrollView>
-
-      <View style={styles.footer}>
-        {messageError ? <Text style={styles.messageError}>{messageError}</Text> : null}
-        <AuthPrimaryButton
-          label="Message Us"
-          showArrow={false}
-          loading={isStartingThread}
-          onPress={handleMessagePress}
-        />
-      </View>
     </SafeAreaView>
   );
 }

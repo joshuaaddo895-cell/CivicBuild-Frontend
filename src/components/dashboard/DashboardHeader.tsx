@@ -11,6 +11,7 @@ interface DashboardHeaderProps {
   cartItemCount?: number;
   userInitials: string;
   userAvatarUri?: string | null;
+  hasUnreadNotifications?: boolean;
   onAvatarPress?: () => void;
   onCartPress?: () => void;
   onNotificationsPress?: () => void;
@@ -21,6 +22,7 @@ export default function DashboardHeader({
   cartItemCount = 0,
   userInitials,
   userAvatarUri,
+  hasUnreadNotifications = false,
   onAvatarPress,
   onCartPress,
   onNotificationsPress,
@@ -31,7 +33,7 @@ export default function DashboardHeader({
       <UserAvatarBadge initials={userInitials} imageUri={userAvatarUri} onPress={onAvatarPress} />
       <Text style={styles.brand}>CivicBuild</Text>
       <View style={styles.actions}>
-        <CartIconButton itemCount={cartItemCount} onPress={onCartPress} />
+        {onCartPress ? <CartIconButton itemCount={cartItemCount} onPress={onCartPress} /> : null}
         <Pressable
           onPress={onSettingsPress}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
@@ -51,7 +53,7 @@ export default function DashboardHeader({
             size={24}
             color={theme.colors.onSurfaceVariant}
           />
-          <View style={styles.notificationDot} />
+          {hasUnreadNotifications ? <View style={styles.notificationDot} /> : null}
         </Pressable>
       </View>
     </View>

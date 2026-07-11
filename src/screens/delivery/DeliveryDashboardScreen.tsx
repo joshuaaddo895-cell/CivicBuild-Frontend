@@ -7,7 +7,9 @@ import { getDeliveryJobStatusLabel, getMyDeliveryJobs, getMyDeliveryProvider } f
 import type { BackendDeliveryJob } from '@appTypes/deliveryApi';
 import type { DeliveryDashboardScreenProps } from '@appTypes/navigation';
 import { DashboardHeader } from '@components/dashboard';
+import { useUnreadInboxSync } from '@hooks/useUnreadInboxSync';
 import { useAuthStore } from '@store/authStore';
+import { useInboxStore } from '@store/inboxStore';
 import theme from '@theme/index';
 import { formatUserDisplayName } from '@utils/userDisplay';
 import { getUserInitials } from '@utils/userInitials';
@@ -20,6 +22,9 @@ export default function DeliveryDashboardScreen({ navigation }: DeliveryDashboar
   const [jobs, setJobs] = useState<BackendDeliveryJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const unreadNotificationCount = useInboxStore((state) => state.unreadNotificationCount);
+
+  useUnreadInboxSync();
 
   const displayName = deliveryProviderProfile?.fullName?.trim() || formatUserDisplayName(user);
   const userInitials = getUserInitials(user, displayName);
@@ -72,6 +77,8 @@ export default function DeliveryDashboardScreen({ navigation }: DeliveryDashboar
         userAvatarUri={userAvatarUri}
         onAvatarPress={() => navigation.getParent()?.navigate('Profile', { screen: 'ProfileMain' })}
         onSettingsPress={() => navigation.navigate('Settings')}
+        hasUnreadNotifications={unreadNotificationCount > 0}
+        onNotificationsPress={() => navigation.navigate('Notifications')}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

@@ -14,9 +14,4 @@ export function mapBackendAgencyPost(post: BackendAgencyPost): AgencyPost {
   };
 }
 
-export function isLocalImageUri(uri: string | null | undefined): boolean {
-  if (!uri) {
-    return false;
-  }
-  return uri.startsWith('file://') || uri.startsWith('content://');
-}
+export { isLocalUploadUri as isLocalImageUri } from './uploadValidation';

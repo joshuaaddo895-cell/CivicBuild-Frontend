@@ -17,32 +17,40 @@ import {
   updateAgencyPost,
   uploadAgencyProductImage,
 } from '@api/agencies';
-import type { AgencyPostType } from '@appTypes/agency';
+import { normalizeApiError } from '@api/errors';
 import type { AgencyPostFormScreenProps } from '@appTypes/navigation';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { ProductImagePicker, ScreenHeader } from '@components/agency';
 import { AuthInput, AuthPrimaryButton } from '@components/auth';
-import { AGENCY_POST_TYPE_LABELS } from '@constants/agencyPostLabels';
+import {
+  AGENCY_POST_CATEGORIES,
+  normalizeAgencyPostCategory,
+  type AgencyPostCategory,
+} from '@constants/agencyPostLabels';
 import theme from '@theme/index';
 import { isLocalImageUri, mapBackendAgencyPost } from '@utils/agencyPostMappers';
+import { buildImageUploadFile } from '@utils/uploadValidation';
 
-const POST_TYPES: { id: AgencyPostType; label: string }[] = [
-  { id: 'service', label: AGENCY_POST_TYPE_LABELS.service },
-  { id: 'material', label: AGENCY_POST_TYPE_LABELS.material },
-  { id: 'general', label: AGENCY_POST_TYPE_LABELS.general },
-];
+const POST_CATEGORIES = AGENCY_POST_CATEGORIES;
 
 export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFormScreenProps) {
   const { postId } = route.params ?? {};
   const isEditing = Boolean(postId);
 
-  const [type, setType] = useState<AgencyPostType>('general');
+  const [category, setCategory] = useState<AgencyPostCategory>('service');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [selectedImageFile, setSelectedImageFile] = useState<LocalUploadFile | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleImageSelected = (file: LocalUploadFile) => {
+    setImageUri(file.uri);
+    setSelectedImageFile(file);
+  };
 
   useEffect(() => {
     if (!postId) {
@@ -67,10 +75,11 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
         return;
       }
 
-      setType(existingPost.type);
+      setCategory(normalizeAgencyPostCategory(existingPost.type));
       setTitle(existingPost.title);
       setDescription(existingPost.description);
       setImageUri(existingPost.imageUri ?? null);
+      setSelectedImageFile(null);
       setIsLoading(false);
     })();
   }, [postId]);
@@ -93,12 +102,9 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
     try {
       let resolvedImageUrl = imageUri;
 
-      if (isLocalImageUri(imageUri)) {
-        const localFile: LocalUploadFile = {
-          uri: imageUri!,
-          name: `post-${Date.now()}.jpg`,
-          mimeType: 'image/jpeg',
-        };
+      if (imageUri && isLocalImageUri(imageUri)) {
+        const localFile = selectedImageFile ?? buildImageUploadFile({ uri: imageUri }, 'post');
+        setIsUploading(true);
         const uploadResult = await uploadAgencyProductImage(localFile);
         if (!uploadResult.ok) {
           setError(uploadResult.error.message);
@@ -108,7 +114,7 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
       }
 
       const payload = {
-        type,
+        type: category,
         title: title.trim(),
         description: description.trim(),
         imageUrl: resolvedImageUrl,
@@ -124,10 +130,14 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
       }
 
       navigation.goBack();
-    } catch {
-      setError('Unable to save post. Please try again.');
+    } catch (saveError) {
+      if (__DEV__) {
+        console.error('[AgencyPostForm] save failed', saveError);
+      }
+      setError(normalizeApiError(saveError).message);
     } finally {
       setIsSaving(false);
+      setIsUploading(false);
     }
   };
 
@@ -152,22 +162,22 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.fieldLabel}>Post Type</Text>
+            <Text style={styles.fieldLabel}>Category</Text>
             <View style={styles.chipRow}>
-              {POST_TYPES.map((entry) => (
+              {POST_CATEGORIES.map((entry) => (
                 <Pressable
                   key={entry.id}
-                  onPress={() => setType(entry.id)}
+                  onPress={() => setCategory(entry.id)}
                   style={({ pressed }) => [
                     styles.chip,
-                    type === entry.id && styles.chipActive,
+                    category === entry.id && styles.chipActive,
                     pressed && styles.pressed,
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={entry.label}
-                  accessibilityState={{ selected: type === entry.id }}
+                  accessibilityState={{ selected: category === entry.id }}
                 >
-                  <Text style={[styles.chipText, type === entry.id && styles.chipTextActive]}>
+                  <Text style={[styles.chipText, category === entry.id && styles.chipTextActive]}>
                     {entry.label}
                   </Text>
                 </Pressable>
@@ -176,26 +186,30 @@ export default function AgencyPostFormScreen({ navigation, route }: AgencyPostFo
 
             <AuthInput
               label="Title"
-              placeholder="Post headline"
+              placeholder="What are you offering?"
               value={title}
               onChangeText={setTitle}
             />
 
             <AuthInput
               label="Description"
-              placeholder="What would you like customers to know?"
+              placeholder="Describe the service or material for customers"
               value={description}
               onChangeText={setDescription}
               multiline
             />
 
-            <ProductImagePicker imageUri={imageUri} onImageSelected={setImageUri} />
+            <ProductImagePicker
+              imageUri={imageUri}
+              onImageSelected={handleImageSelected}
+              isLoading={isUploading || isSaving}
+            />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <AuthPrimaryButton
               label={isEditing ? 'Save Changes' : 'Post'}
-              loading={isSaving}
+              loading={isSaving || isUploading}
               onPress={handleSave}
             />
           </ScrollView>

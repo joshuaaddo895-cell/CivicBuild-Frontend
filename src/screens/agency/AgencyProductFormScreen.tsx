@@ -16,6 +16,7 @@ import {
   uploadAgencyProductImage,
 } from '@api/agencies';
 import { getProduct, mapBackendProduct } from '@api/catalog';
+import { normalizeApiError } from '@api/errors';
 import type { AgencyProductFormScreenProps } from '@appTypes/navigation';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { ProductImagePicker, ScreenHeader } from '@components/agency';
@@ -23,7 +24,9 @@ import { AuthInput, AuthPrimaryButton } from '@components/auth';
 import { PRODUCT_FORM_CATEGORIES, PRODUCT_FORM_UNITS } from '@constants/productFormOptions';
 import { useProductStore } from '@store/productStore';
 import theme from '@theme/index';
+import { isLocalImageUri } from '@utils/agencyPostMappers';
 import { normalizeProductUnit } from '@utils/multipartUpload';
+import { buildImageUploadFile } from '@utils/uploadValidation';
 
 const DEFAULT_IMAGE =
   'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80';
@@ -52,10 +55,17 @@ export default function AgencyProductFormScreen({
   const [unit, setUnit] = useState<string>(PRODUCT_FORM_UNITS[0]);
   const [stockQuantity, setStockQuantity] = useState('10');
   const [imageUri, setImageUri] = useState(DEFAULT_IMAGE);
+  const [selectedImageFile, setSelectedImageFile] = useState<LocalUploadFile | null>(null);
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
   const [isLoadingProduct, setIsLoadingProduct] = useState(Boolean(productId));
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleImageSelected = (file: LocalUploadFile) => {
+    setImageUri(file.uri);
+    setSelectedImageFile(file);
+  };
 
   useEffect(() => {
     if (!productId) {
@@ -80,6 +90,7 @@ export default function AgencyProductFormScreen({
       setUnit(stripPerPrefix(product.unit));
       setStockQuantity(product.stockQuantity != null ? String(product.stockQuantity) : '10');
       setImageUri(product.imageUri ?? DEFAULT_IMAGE);
+      setSelectedImageFile(null);
       setDescription(product.description ?? '');
       setIsLoadingProduct(false);
     })();
@@ -111,12 +122,9 @@ export default function AgencyProductFormScreen({
     try {
       let resolvedImageUrl = imageUri;
 
-      if (imageUri.startsWith('file://') || imageUri.startsWith('content://')) {
-        const localFile: LocalUploadFile = {
-          uri: imageUri,
-          name: `product-${Date.now()}.jpg`,
-          mimeType: 'image/jpeg',
-        };
+      if (isLocalImageUri(imageUri)) {
+        const localFile = selectedImageFile ?? buildImageUploadFile({ uri: imageUri }, 'product');
+        setIsUploading(true);
         const uploadResult = await uploadAgencyProductImage(localFile);
         if (!uploadResult.ok) {
           setError(uploadResult.error.message);
@@ -154,13 +162,13 @@ export default function AgencyProductFormScreen({
       await fetchCatalog();
       navigation.goBack();
     } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'Unable to save product. Please try again.',
-      );
+      if (__DEV__) {
+        console.error('[AgencyProductForm] save failed', saveError);
+      }
+      setError(normalizeApiError(saveError).message);
     } finally {
       setIsSaving(false);
+      setIsUploading(false);
     }
   };
 
@@ -194,7 +202,11 @@ export default function AgencyProductFormScreen({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <ProductImagePicker imageUri={imageUri} onImageSelected={setImageUri} />
+          <ProductImagePicker
+            imageUri={imageUri}
+            onImageSelected={handleImageSelected}
+            isLoading={isUploading || isSaving}
+          />
 
           <AuthInput
             label="Product Name"
@@ -273,7 +285,7 @@ export default function AgencyProductFormScreen({
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <AuthPrimaryButton label="Save" loading={isSaving} onPress={handleSave} />
+          <AuthPrimaryButton label="Save" loading={isSaving || isUploading} onPress={handleSave} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

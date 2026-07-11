@@ -1,11 +1,12 @@
-import type { AgencyPostType, AgencyProfileDetails } from '@appTypes/agency';
+import type { AgencyPost, AgencyPostType, AgencyProfileDetails } from '@appTypes/agency';
 import type { ApiResponse } from '@appTypes/api';
 import type { BackendProduct } from '@appTypes/catalog';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
+import { mapBackendAgencyPost } from '@utils/agencyPostMappers';
 import { getMultipartUploadConfig } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
 
-import { toApiResult, type ApiResult } from './apiResult';
+import { toApiResult, toUploadApiResult, type ApiResult } from './apiResult';
 import { unwrapApiResponse } from './authTypes';
 import apiClient from './client';
 
@@ -78,6 +79,18 @@ export interface PaginatedAgencies {
   hasNextPage: boolean;
 }
 
+export interface PaginatedAgencyPosts {
+  items: BackendAgencyPost[];
+  page: number;
+  limit: number;
+  total: number;
+  hasNextPage: boolean;
+}
+
+function unwrapAgencyPosts(data: BackendAgencyPost[] | PaginatedAgencyPosts): BackendAgencyPost[] {
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
 export function mapAgencyToProfileDetails(agency: BackendAgency): AgencyProfileDetails {
   return {
     tagline: agency.tagline ?? '',
@@ -139,7 +152,7 @@ export async function getAgency(agencyId: string): Promise<ApiResult<BackendAgen
 export async function uploadAgencyProductImage(
   file: LocalUploadFile,
 ): Promise<ApiResult<{ imageUrl: string }>> {
-  return toApiResult(
+  return toUploadApiResult(
     apiClient
       .post<ApiResponse<{ imageUrl: string }>>(
         '/api/agencies/me/products/upload-image',
@@ -147,6 +160,7 @@ export async function uploadAgencyProductImage(
         getMultipartUploadConfig(),
       )
       .then((response) => unwrapApiResponse(response.data)),
+    'agency product image',
   );
 }
 
@@ -180,16 +194,18 @@ export async function deleteAgencyProduct(productId: string): Promise<ApiResult<
 export async function getMyAgencyPosts(): Promise<ApiResult<BackendAgencyPost[]>> {
   return toApiResult(
     apiClient
-      .get<ApiResponse<BackendAgencyPost[]>>('/api/agencies/me/posts')
-      .then((response) => unwrapApiResponse(response.data)),
+      .get<ApiResponse<BackendAgencyPost[] | PaginatedAgencyPosts>>('/api/agencies/me/posts')
+      .then((response) => unwrapAgencyPosts(unwrapApiResponse(response.data))),
   );
 }
 
 export async function getAgencyPosts(agencyId: string): Promise<ApiResult<BackendAgencyPost[]>> {
   return toApiResult(
     apiClient
-      .get<ApiResponse<BackendAgencyPost[]>>(`/api/agencies/${agencyId}/posts`)
-      .then((response) => unwrapApiResponse(response.data)),
+      .get<ApiResponse<BackendAgencyPost[] | PaginatedAgencyPosts>>(
+        `/api/agencies/${agencyId}/posts`,
+      )
+      .then((response) => unwrapAgencyPosts(unwrapApiResponse(response.data))),
   );
 }
 
@@ -218,6 +234,39 @@ export async function deleteAgencyPost(postId: string): Promise<ApiResult<null>>
   return toApiResult(
     apiClient.delete<ApiResponse<null>>(`/api/agencies/me/posts/${postId}`).then(() => null),
   );
+}
+
+export interface AgencyPostFeedItem extends AgencyPost {
+  agencyName: string;
+}
+
+export async function getRecentAgencyPosts(limit = 6): Promise<ApiResult<AgencyPostFeedItem[]>> {
+  const agenciesResult = await listAgencies(undefined, 0, 10);
+  if (!agenciesResult.ok) {
+    return { ok: false, error: agenciesResult.error };
+  }
+
+  const postsByAgency = await Promise.all(
+    agenciesResult.data.items.map(async (agency) => {
+      const postsResult = await getAgencyPosts(agency.id);
+      if (!postsResult.ok) {
+        return [] as AgencyPostFeedItem[];
+      }
+
+      return postsResult.data.map((post) => ({
+        ...mapBackendAgencyPost(post),
+        agencyName: agency.name,
+      }));
+    }),
+  );
+
+  const merged = postsByAgency
+    .flat()
+    .filter((post) => post.type === 'service' || post.type === 'material')
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, limit);
+
+  return { ok: true, data: merged };
 }
 
 export async function getMyPortfolio(): Promise<ApiResult<BackendPortfolioImage[]>> {
