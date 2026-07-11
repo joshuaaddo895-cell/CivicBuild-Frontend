@@ -2,20 +2,32 @@ import type { AgencyOrder, OrderStatus } from '@appTypes/agency';
 import type { BackendAgencyOrder } from '@appTypes/agencyOrdersApi';
 import { mapBackendAgencyOrder } from '@appTypes/agencyOrdersApi';
 import type { ApiResponse } from '@appTypes/api';
+import type { PaginatedItems } from '@appTypes/catalog';
 
 import { toApiResult, type ApiResult } from './apiResult';
 import { unwrapApiResponse } from './authTypes';
 import apiClient from './client';
 
+function unwrapOrders(
+  data: BackendAgencyOrder[] | PaginatedItems<BackendAgencyOrder>,
+): BackendAgencyOrder[] {
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
 export async function getAgencyOrders(): Promise<ApiResult<AgencyOrder[]>> {
   return toApiResult(
-    apiClient.get<ApiResponse<BackendAgencyOrder[]>>('/api/agencies/me/orders').then((response) =>
-      unwrapApiResponse(response.data)
-        .map(mapBackendAgencyOrder)
-        .sort(
-          (left, right) => new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime(),
-        ),
-    ),
+    apiClient
+      .get<ApiResponse<BackendAgencyOrder[] | PaginatedItems<BackendAgencyOrder>>>(
+        '/api/agencies/me/orders',
+      )
+      .then((response) =>
+        unwrapOrders(unwrapApiResponse(response.data))
+          .map(mapBackendAgencyOrder)
+          .sort(
+            (left, right) =>
+              new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime(),
+          ),
+      ),
   );
 }
 

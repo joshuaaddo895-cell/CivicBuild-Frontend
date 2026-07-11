@@ -39,6 +39,10 @@ function countUnreadThreads(threads: MessageThread[]): number {
 }
 
 function countUnreadNotifications(notifications: BackendNotification[]): number {
+  if (!Array.isArray(notifications)) {
+    return 0;
+  }
+
   return notifications.filter((notification) => !notification.read).length;
 }
 
@@ -153,17 +157,21 @@ export const useInboxStore = create<InboxStore>()(
       },
 
       refreshUnreadCounts: async () => {
-        const [threadsResult, notificationsResult] = await Promise.all([
-          getThreads(),
-          getNotifications(),
-        ]);
+        try {
+          const [threadsResult, notificationsResult] = await Promise.all([
+            getThreads(),
+            getNotifications(),
+          ]);
 
-        if (threadsResult.ok) {
-          get().setUnreadFromThreads(threadsResult.data);
-        }
+          if (threadsResult.ok) {
+            get().setUnreadFromThreads(threadsResult.data);
+          }
 
-        if (notificationsResult.ok) {
-          get().setUnreadFromNotifications(notificationsResult.data);
+          if (notificationsResult.ok) {
+            get().setUnreadFromNotifications(notificationsResult.data);
+          }
+        } catch {
+          // Inbox sync must never break dashboard screens.
         }
       },
 

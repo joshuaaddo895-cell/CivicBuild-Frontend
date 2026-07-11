@@ -1,15 +1,21 @@
 import type { ApiResponse } from '@appTypes/api';
-import type { BackendNotification } from '@appTypes/notificationsApi';
+import type { BackendNotification, PaginatedNotifications } from '@appTypes/notificationsApi';
 
 import { toApiResult, type ApiResult } from './apiResult';
 import { unwrapApiResponse } from './authTypes';
 import apiClient from './client';
 
+function unwrapNotifications(
+  data: BackendNotification[] | PaginatedNotifications,
+): BackendNotification[] {
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
 export async function getNotifications(): Promise<ApiResult<BackendNotification[]>> {
   return toApiResult(
     apiClient
-      .get<ApiResponse<BackendNotification[]>>('/api/notifications')
-      .then((response) => unwrapApiResponse(response.data)),
+      .get<ApiResponse<BackendNotification[] | PaginatedNotifications>>('/api/notifications')
+      .then((response) => unwrapNotifications(unwrapApiResponse(response.data))),
   );
 }
 

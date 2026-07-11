@@ -9,3 +9,11 @@ export interface BackendNotification {
   createdAt: string;
   data?: Record<string, string>;
 }
+
+export interface PaginatedNotifications {
+  items: BackendNotification[];
+  page?: number;
+  limit?: number;
+  total?: number;
+  hasNextPage?: boolean;
+}

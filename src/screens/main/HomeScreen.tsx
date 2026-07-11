@@ -50,7 +50,6 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
-  const [postsError, setPostsError] = useState<string | null>(null);
 
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
   const isSaved = useSavedStore((state) => state.isSaved);
@@ -100,14 +99,12 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
 
   const loadAgencyPosts = useCallback(async () => {
     setIsLoadingPosts(true);
-    setPostsError(null);
 
-    const result = await getRecentAgencyPosts(6);
-    if (result.ok) {
-      setAgencyPosts(result.data);
-    } else {
+    try {
+      const result = await getRecentAgencyPosts(6);
+      setAgencyPosts(result.ok ? result.data : []);
+    } catch {
       setAgencyPosts([]);
-      setPostsError(result.error.message);
     }
 
     setIsLoadingPosts(false);
@@ -225,8 +222,6 @@ export default function HomeScreen({ navigation }: HomeMainScreenProps) {
             <View style={styles.inlineState}>
               <ActivityIndicator color={theme.colors.primary} />
             </View>
-          ) : postsError ? (
-            <Text style={styles.errorText}>{postsError}</Text>
           ) : agencyPosts.length === 0 ? (
             <Text style={styles.emptyText}>No agency posts yet.</Text>
           ) : (

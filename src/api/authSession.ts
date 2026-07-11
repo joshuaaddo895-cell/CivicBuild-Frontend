@@ -4,7 +4,7 @@ import type { User } from '@appTypes/api';
 import { getApiBaseUrl, getApiTimeoutMs } from '@config/api';
 
 import { mapBackendUserToUser, unwrapApiResponse, type BackendAuthTokens } from './authTypes';
-import { mapBackendUserResponse, type BackendUserResponse } from './users';
+import { mapBackendUserResponse, type BackendUserResponse } from './userMappers';
 
 export interface AuthSession {
   user: User;

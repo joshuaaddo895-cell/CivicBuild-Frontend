@@ -2,23 +2,15 @@ import type { ApiResponse, User } from '@appTypes/api';
 import type { LocalUploadFile } from '@appTypes/verificationDocuments';
 import { getMultipartUploadConfig } from '@utils/multipartUpload';
 import { buildMultipartFormData } from '@utils/uploadValidation';
-import { parseDisplayName } from '@utils/userDisplay';
 
 import { toUploadApiResult, type ApiResult } from './apiResult';
-import { mapBackendUserToUser, unwrapApiResponse } from './authTypes';
+import { unwrapApiResponse } from './authTypes';
 import apiClient from './client';
 import { normalizeApiError, type NormalizedApiError } from './errors';
+import { mapBackendUserResponse, type BackendUserResponse } from './userMappers';
 
-export interface BackendUserResponse {
-  id: string;
-  fullName: string;
-  email: string;
-  role?: string;
-  verificationStatus?: string;
-  active?: boolean;
-  profilePictureUrl?: string | null;
-  createdAt?: string;
-}
+export type { BackendUserResponse } from './userMappers';
+export { mapBackendUserResponse } from './userMappers';
 
 export interface UpdateProfileInput {
   fullName?: string;
@@ -26,34 +18,6 @@ export interface UpdateProfileInput {
 }
 
 export type UserProfileResult<T> = { ok: true; data: T } | { ok: false; error: NormalizedApiError };
-
-export function mapBackendUserResponse(data: BackendUserResponse, current?: User | null): User {
-  const email = data.email || current?.email || '';
-  const { firstName, lastName } = parseDisplayName(
-    data.fullName,
-    current ? `${current.firstName} ${current.lastName}`.trim() : email.split('@')[0] || 'User',
-  );
-
-  const mapped = mapBackendUserToUser(
-    {
-      id: data.id,
-      email,
-      fullName: data.fullName,
-      role: data.role,
-      verificationStatus: data.verificationStatus,
-    },
-    email,
-  );
-
-  return {
-    ...mapped,
-    firstName,
-    lastName,
-    avatar: data.profilePictureUrl ?? current?.avatar,
-    createdAt: data.createdAt ?? current?.createdAt ?? mapped.createdAt,
-    updatedAt: new Date().toISOString(),
-  };
-}
 
 export async function getProfile(): Promise<UserProfileResult<User>> {
   try {

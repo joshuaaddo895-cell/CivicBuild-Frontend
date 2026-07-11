@@ -242,8 +242,8 @@ export interface AgencyPostFeedItem extends AgencyPost {
 
 export async function getRecentAgencyPosts(limit = 6): Promise<ApiResult<AgencyPostFeedItem[]>> {
   const agenciesResult = await listAgencies(undefined, 0, 10);
-  if (!agenciesResult.ok) {
-    return { ok: false, error: agenciesResult.error };
+  if (!agenciesResult.ok || agenciesResult.data.items.length === 0) {
+    return { ok: true, data: [] };
   }
 
   const postsByAgency = await Promise.all(
