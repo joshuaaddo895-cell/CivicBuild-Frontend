@@ -1,0 +1,32 @@
+{
+  "cement": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Nordic_Climate_Solutions_2009-09-09.jpg/960px-Nordic_Climate_Solutions_2009-09-09.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Grain_bins_in_Cashton%2C_Wisconsin.jpg/960px-Grain_bins_in_Cashton%2C_Wisconsin.jpg"
+  ],
+  "blocks": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Bricklayer_J4.jpg/960px-Bricklayer_J4.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/0/0d/Concreteblocks.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/c/c7/Linteau.medieval.png"
+  ],
+  "gravel": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Gravel_on_a_beach_in_Thirasia%2C_Santorini%2C_Greece.jpg/960px-Gravel_on_a_beach_in_Thirasia%2C_Santorini%2C_Greece.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/9/9e/Ice_cubes_openphoto.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Limestone_processing_plant%2C_Tennessee.jpg/960px-Limestone_processing_plant%2C_Tennessee.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/0/09/20mm-aggregate.jpg"
+  ],
+  "steel": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fe/A_bunch_of_rebar.jpg/960px-A_bunch_of_rebar.jpg"
+  ],
+  "roofing": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Lumholtz%27s_tree_kangaroo-02.JPG/960px-Lumholtz%27s_tree_kangaroo-02.JPG"
+  ],
+  "tiles": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Casa_Batllo_Overview_Barcelona_Spain_cut.jpg/960px-Casa_Batllo_Overview_Barcelona_Spain_cut.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/0/07/Chinese_porcelain_tiles%2C_Cochin_synagogue.jpg"
+  ],
+  "paint": [],
+  "plumbing": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Sansewer.jpg/960px-Sansewer.jpg"
+  ],
+  "electrical": []
+}
