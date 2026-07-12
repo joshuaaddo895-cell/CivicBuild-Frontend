@@ -20,7 +20,7 @@ function unwrapPaginated<T>(response: ApiResponse<PaginatedItems<T>>): Paginated
 }
 
 export function mapBackendProduct(product: BackendProduct): Product {
-  const imageUri = resolveProductImageUri(product.imageUrl);
+  const imageUri = resolveProductImageUri(product.imageUrl, product.category);
   return enrichProduct({
     id: product.id,
     category: product.category,

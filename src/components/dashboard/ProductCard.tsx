@@ -24,7 +24,7 @@ export default function ProductCard({
   onFavoritePress,
 }: ProductCardProps) {
   const unitSuffix = formatUnitSuffix(product.unit);
-  const imageUri = resolveProductImageUri(product.imageUri);
+  const imageUri = resolveProductImageUri(product.imageUri, product.category);
 
   return (
     <Pressable
