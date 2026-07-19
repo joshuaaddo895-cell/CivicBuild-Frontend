@@ -15,10 +15,26 @@ interface SavedActions {
 
 type SavedStore = SavedState & SavedActions;
 
+const initialState: SavedState = {
+  items: [],
+};
+
+const migrateSavedState = (persistedState: unknown): SavedState => {
+  if (!persistedState || typeof persistedState !== 'object') {
+    return initialState;
+  }
+
+  const state = persistedState as Partial<SavedState>;
+
+  return {
+    items: Array.isArray(state.items) ? state.items : [],
+  };
+};
+
 export const useSavedStore = create<SavedStore>()(
   persist(
     (set, get) => ({
-      items: [],
+      ...initialState,
 
       toggleSaved: (id, type) => {
         const existing = get().items.find((item) => item.id === id && item.type === type);
@@ -49,6 +65,8 @@ export const useSavedStore = create<SavedStore>()(
     {
       name: 'civicbuild-saved-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      migrate: (persistedState) => migrateSavedState(persistedState),
     },
   ),
 );

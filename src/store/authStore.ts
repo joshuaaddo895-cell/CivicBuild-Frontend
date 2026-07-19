@@ -62,6 +62,13 @@ const initialState: AuthState = {
   deliveryProviderStatus: 'none',
 };
 
+const migrateAuthState = (persistedState: unknown): AuthState => ({
+  ...initialState,
+  ...(persistedState && typeof persistedState === 'object'
+    ? (persistedState as Partial<AuthState>)
+    : {}),
+});
+
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
@@ -152,6 +159,8 @@ export const useAuthStore = create<AuthStore>()(
     {
       name: 'civicbuild-auth-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      migrate: (persistedState) => migrateAuthState(persistedState),
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
@@ -162,10 +171,12 @@ export const useAuthStore = create<AuthStore>()(
         deliveryProviderStatus: state.deliveryProviderStatus,
       }),
       onRehydrateStorage: () => () => {
-        void (async () => {
-          await useAuthStore.getState().restoreSessionFromSecureStorage();
-          useAuthStore.getState().setHasHydrated(true);
-        })();
+        useAuthStore
+          .getState()
+          .restoreSessionFromSecureStorage()
+          .finally(() => {
+            useAuthStore.getState().setHasHydrated(true);
+          });
       },
     },
   ),
