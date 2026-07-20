@@ -1,4 +1,3 @@
-import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -30,9 +29,7 @@ export function useGoogleAuthRequest() {
     androidClientId: config.androidClientId,
     responseType: 'id_token',
     scopes: ['openid', 'profile', 'email'],
-    redirectUri: AuthSession.makeRedirectUri({
-      projectNameForProxy: '@prinz-anaxy/civicbuild',
-    }),
+    redirectUri: 'https://auth.expo.io/@prinz-anaxy/civicbuild',
   });
 }
 
