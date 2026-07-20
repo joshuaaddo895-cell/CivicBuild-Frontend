@@ -1,4 +1,5 @@
 import * as Google from 'expo-auth-session/providers/google';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -22,11 +23,13 @@ export function isGoogleSignInConfigured(): boolean {
 
 export function useGoogleAuthRequest() {
   const config = getGoogleAuthConfig();
+  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
   return Google.useAuthRequest({
+    clientId: config.webClientId,
     webClientId: config.webClientId,
-    iosClientId: config.iosClientId,
-    androidClientId: config.androidClientId,
+    iosClientId: isExpoGo ? undefined : config.iosClientId,
+    androidClientId: isExpoGo ? undefined : config.androidClientId,
     responseType: 'id_token',
     scopes: ['openid', 'profile', 'email'],
     redirectUri: 'https://auth.expo.io/@prinz-anaxy/civicbuild',
