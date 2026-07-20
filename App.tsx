@@ -1,12 +1,13 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import ErrorBoundary from '@components/ErrorBoundary';
 import { useAppFonts } from '@hooks/useAppFonts';
 import RootNavigator from '@navigation/RootNavigator';
+import SplashScreen from '@screens/SplashScreen';
 import { useAuthStore } from '@store/authStore';
 import theme from '@theme/index';
 
@@ -28,11 +29,18 @@ const queryClient = new QueryClient({
 export default function App() {
   const fontsLoaded = useAppFonts();
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const [animationDone, setAnimationDone] = useState(false);
 
-  if (!fontsLoaded || !hasHydrated) {
+  // App is ready to render when fonts are loaded and auth store has rehydrated
+  const appReady = fontsLoaded && hasHydrated;
+  // Show the full app only once BOTH the splash animation AND app init are done
+  const splashDone = animationDone && appReady;
+
+  if (!splashDone) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View style={styles.fill}>
+        <StatusBar style="dark" />
+        <SplashScreen onFinish={() => setAnimationDone(true)} />
       </View>
     );
   }
@@ -50,10 +58,8 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  loading: {
+  fill: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: theme.colors.background,
   },
 });
