@@ -4,3 +4,9 @@
 
 - July 14: initial README added
 - July 18: team status and workflow details added.
+
+## Contribution timeline
+
+- July 14: README created.
+- July 18: progress notes added.
+- July 23: contribution guidance and history notes added.
